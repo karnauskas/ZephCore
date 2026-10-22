@@ -1,6 +1,7 @@
 // prefs.json (helpers/PrefsJson.cpp over upstream's ConfigSerializer).
 #include "test.h"
 #include "PrefsJson.h"
+#include <helpers/RadioRecovery.h>
 #include "PrefsCodec.h"
 
 #include <cstring>
@@ -227,4 +228,22 @@ TEST(power_json, "UNIT-BUDGET-004", "Power budget persists in both JSON roles wi
 	NodePrefs q = defaults(), r = defaults();
 	CHECK(companionPrefsFromJson(q, c) && serverPrefsFromJson(r, s));
 	CHECK(q.adaptive_power == 1 && r.adaptive_power == 1);
+}
+
+TEST(recovery_json, "UNIT-RECOVERY-005", "Recovery checkpoint round trips in JSON while legacy bytes stay frozen") {
+	NodePrefs p = defaults();
+	p.freq = 869.61817f;
+	auto c = companionBytes(p), s = serverBytes(p);
+	RadioRecovery::confirm(p);
+	p.radio_checkpoint.pending = 1;
+	p.radio_checkpoint.attempts = 2;
+	p.radio_checkpoint.candidate = RadioRecovery::candidate(p);
+	CHECK(c == companionBytes(p) && s == serverBytes(p));
+	MemStream cs, ss;
+	CHECK(companionPrefsToJson(p, cs) && serverPrefsToJson(p, ss));
+	NodePrefs q = defaults(), r = defaults();
+	CHECK(companionPrefsFromJson(q, cs) && serverPrefsFromJson(r, ss));
+	CHECK(RadioRecovery::hasGood(q) && RadioRecovery::hasGood(r));
+	CHECK(q.radio_checkpoint.attempts == 2 && r.radio_checkpoint.pending == 1);
+	CHECK(q.radio_checkpoint.candidate == RadioRecovery::candidate(q));
 }

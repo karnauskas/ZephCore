@@ -390,12 +390,13 @@ bool ZephyrDataStore::loadLegacyPrefs(NodePrefs &prefs)
 	return true;
 }
 
-void ZephyrDataStore::savePrefs(const NodePrefs &prefs)
+bool ZephyrDataStore::savePrefs(const NodePrefs &prefs)
 {
 	bool ok = zephcore_prefs_json_save(PREFS_JSON_FILE, prefs, companionPrefsToJson);
 
 	LOG_DBG("savePrefs: wrote %s, ok=%d, name='%.16s'", PREFS_JSON_FILE, ok ? 1 : 0,
 		prefs.node_name);
+	return ok;
 }
 
 /* ── Contacts: contacts3 (152B records, Arduino-compatible) ────────── */

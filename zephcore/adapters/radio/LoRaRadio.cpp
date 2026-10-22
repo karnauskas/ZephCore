@@ -1,3 +1,4 @@
+#include <helpers/RadioRecovery.h>
 /*
  * SPDX-License-Identifier: MIT
  * LoRa radio base class — shared algorithms for all radio adapters.
@@ -458,7 +459,8 @@ void LoRaRadio::configure(bool tx)
 
 bool LoRaRadio::hwConfigure(const struct lora_modem_config &cfg)
 {
-	int ret = lora_config(_dev, &cfg);
+	int ret = device_is_ready(_dev) ? lora_config(_dev, &cfg) : -ENODEV;
+	_last_hw_error = ret;
 
 	if (ret < 0) {
 		LOG_ERR("lora_config failed: %d", ret);
@@ -479,7 +481,7 @@ void LoRaRadio::begin()
 		return;
 	}
 
-	startTxThread();
+	_startup_ready = false;
 
 	if (!device_is_ready(_dev)) {
 		LOG_ERR("LoRa device not ready");
@@ -487,7 +489,28 @@ void LoRaRadio::begin()
 	}
 
 
+	if (_recovery_save) {
+		bool restored = RadioRecovery::prepare(*_prefs);
+		_recovery_armed = _recovery_save(*_prefs, _recovery_context);
+		LOG_INF("radio startup checkpoint: attempt=%u restored=%d durable=%d",
+			(unsigned)_prefs->radio_checkpoint.attempts, restored, _recovery_armed);
+	}
+	startTxThread();
 	startReceive();
+	/* One rollback attempt for driver-rejected modem settings only. */
+	if (!_config_cached && (_last_hw_error == -EINVAL || _last_hw_error == -ENOTSUP) &&
+	    _recovery_armed && RadioRecovery::restore(*_prefs)) {
+		if (_recovery_save(*_prefs, _recovery_context)) {
+			LOG_WRN("radio: restored last-known-good modem settings");
+			startReceive();
+		}
+	}
+	if (!_config_cached || !atomic_get(&_in_recv_mode)) {
+		LOG_ERR("radio startup self-test failed: config=%d rx=%d error=%d",
+			_config_cached, (int)atomic_get(&_in_recv_mode), _last_hw_error);
+		return;
+	}
+	_startup_ready = true;
 
 	/* The driver's RX-boost flag starts from DTS; push ours so the
 	 * hardware matches _rx_boost_enabled before prefs are applied. */
@@ -505,6 +528,17 @@ void LoRaRadio::begin()
 	if (_ops.post_begin) {
 		_ops.post_begin(_dev);
 	}
+}
+
+void LoRaRadio::bootComplete()
+{
+	if (!_startup_ready || !_recovery_save) return;
+	RadioRecovery::confirm(*_prefs);
+	if (!_recovery_armed) return;
+	if (!_recovery_save(*_prefs, _recovery_context)) {
+		LOG_ERR("radio startup confirmation could not be persisted");
+	}
+	_recovery_armed = false;
 }
 
 void LoRaRadio::reconfigure()
@@ -554,6 +588,10 @@ void LoRaRadio::clearRadioOverride()
 void LoRaRadio::startReceive()
 {
 	configureRx();
+	if (!_config_cached) {
+		atomic_set(&_in_recv_mode, 0);
+		return;
+	}
 
 	int ret;
 
@@ -640,6 +678,7 @@ void LoRaRadio::startReceive()
 	ret = lora_recv_async(_dev, rxCallbackStatic, this);
 	if (ret < 0) {
 		LOG_ERR("lora_recv_async failed: %d", ret);
+		_last_hw_error = ret;
 		atomic_set(&_in_recv_mode, 0);
 		return;
 	}
@@ -705,6 +744,12 @@ bool LoRaRadio::startSendRaw(const uint8_t *bytes, int len)
 	/* LBT: stay in RX (no cancel) so the driver's send_async takes its
 	 * RX->TX entry and restores RX itself on CAD-busy. */
 	configureTx();
+	if (!_config_cached) {
+		_board->onAfterTransmit();
+		atomic_set(&_tx_active, 0);
+		zc_pm_unblock_sleep();
+		return false;
+	}
 
 	memcpy(_tx_buf, bytes, len);
 	/* Published before the _tx_start_sem handoff below so txWaitBudgetMs()
@@ -791,7 +836,7 @@ bool LoRaRadio::isRadioReady()
 {
 	/* BUSY high means the radio cannot accept SPI commands now
 	 * (e.g. duty-cycle sleep phase on SX126x/LR11xx). */
-	return !hwIsChipBusy();
+	return device_is_ready(_dev) && !hwIsChipBusy();
 }
 
 /* ── Airtime + scoring ────────────────────────────────────────────────── */
@@ -858,6 +903,7 @@ int LoRaRadio::getNoiseFloor() const
 
 void LoRaRadio::triggerNoiseFloorCalibrate(int threshold)
 {
+	if (!device_is_ready(_dev) || !_config_cached) return;
 	_calibration_threshold = threshold;
 
 	/* Own the sampling cadence rather than inheriting the caller's.  Early
@@ -1042,6 +1088,7 @@ bool LoRaRadio::isReceiving()
  * cadence; kept in separate functions. */
 void LoRaRadio::radioMaintenance()
 {
+	if (!device_is_ready(_dev) || !_config_cached) return;
 	/* Never mid-TX or mid-RX: both jobs warm-sleep the chip. The RX counters
 	 * cannot see a packet landing now; isReceiving() can. */
 	if (atomic_get(&_tx_active) || isReceiving()) {
@@ -1223,6 +1270,7 @@ uint8_t LoRaRadio::cadBasePeak()
 
 void LoRaRadio::cadMaintenance()
 {
+	if (!device_is_ready(_dev) || !_config_cached) return;
 	if (_probe_interval_s == 0) {
 		return;
 	}
@@ -1336,6 +1384,7 @@ static uint32_t clampDeadline(int64_t remaining_ms)
  * wake to decide how long it may sleep. */
 uint32_t LoRaRadio::msUntilNextMaintenance()
 {
+	if (!device_is_ready(_dev) || !_config_cached) return mesh::MAINTENANCE_IDLE;
 	int64_t now = k_uptime_get();
 	uint32_t next = mesh::MAINTENANCE_IDLE;
 
@@ -1477,7 +1526,7 @@ bool LoRaRadio::setRxBoost(bool enable)
 
 bool LoRaRadio::setFemRxEnable(bool enable)
 {
-	if (!_ops.set_fem_rx || !_ops.set_fem_rx(_dev, enable)) {
+	if (!device_is_ready(_dev) || !_ops.set_fem_rx || !_ops.set_fem_rx(_dev, enable)) {
 		return false;
 	}
 	LOG_INF("FEM RX gain %s", enable ? "enabled" : "disabled");
@@ -1486,7 +1535,7 @@ bool LoRaRadio::setFemRxEnable(bool enable)
 
 bool LoRaRadio::configSideDetectors(const uint8_t *sfs, uint8_t num)
 {
-	if (!_ops.side_detectors) {
+	if (!device_is_ready(_dev) || !_ops.side_detectors) {
 		return false;
 	}
 

@@ -18,6 +18,7 @@ add_executable(zephcore_unit
   unit/timesync_tests.cpp
   unit/helper_tests.cpp
   unit/radio_tests.cpp
+  unit/recovery_tests.cpp
   unit/lora_timing_tests.cpp
   unit/prefs_codec_tests.cpp
   unit/prefs_json_tests.cpp

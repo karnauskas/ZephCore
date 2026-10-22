@@ -24,7 +24,13 @@ public:
 
 	/* Mandatory, before begin(): the radio reads freq/bw/sf/cr/power
 	 * through this pointer from then on (LoRaConfig only seeds prefs). */
-	void setPrefs(NodePrefs *prefs) { _prefs = prefs; }
+	using RecoverySave = bool (*)(const NodePrefs &, void *);
+	void setPrefs(NodePrefs *prefs, RecoverySave save = nullptr, void *context = nullptr) {
+		_prefs = prefs; _recovery_save = save; _recovery_context = context;
+	}
+	/* Promote only after the composition root has finished startup. */
+	void bootComplete();
+	bool startupReady() const { return _startup_ready; }
 
 	/* Callbacks */
 	void setRxCallback(RadioRxCallback cb, void *user_data) {
@@ -100,7 +106,7 @@ public:
 	 * False when unsupported or the set violates a chip constraint. */
 	bool configSideDetectors(const uint8_t *sfs, uint8_t num);
 	int formatFreqErrorStatus(char *buf, int cap) override {
-		return _ops.format_freq_error ? _ops.format_freq_error(_dev, buf, cap) : 0;
+		return device_is_ready(_dev) && _ops.format_freq_error ? _ops.format_freq_error(_dev, buf, cap) : 0;
 	}
 
 	/* Read-only view of the modem config currently used by buildModemConfig().
@@ -153,12 +159,12 @@ private:
 	const LoRaRadioOps &_ops;
 
 	bool hwConfigure(const struct lora_modem_config &cfg);
-	void hwCancelReceive() { lora_recv_async(_dev, NULL, NULL); }
+	void hwCancelReceive() { if (device_is_ready(_dev)) lora_recv_async(_dev, NULL, NULL); }
 	int hwSendAsync(uint8_t *buf, uint32_t len, struct k_poll_signal *sig)
 	{
 		return lora_send_async(_dev, buf, len, sig);
 	}
-	int16_t hwGetCurrentRSSI() { return _ops.rssi_inst ? _ops.rssi_inst(_dev) : -80; }
+	int16_t hwGetCurrentRSSI() { return device_is_ready(_dev) && _ops.rssi_inst ? _ops.rssi_inst(_dev) : -80; }
 	/* Read `n` RSSI samples `spacing_us` apart, bracketed once (on the LR
 	 * families each single read tears the duty cycle down and back up).
 	 * Returns samples written (< n: refused partway, abandon), or -EAGAIN
@@ -167,10 +173,10 @@ private:
 	int hwGetRssiBurst(int16_t *out, int n, uint32_t spacing_us);
 	/* The radio's "currently receiving" signal: latch + raw IRQ bits. Clears
 	 * sticky bits only to release an expired grace or payload deadline. */
-	bool hwIsReceiving() { return _ops.is_receiving && _ops.is_receiving(_dev); }
+	bool hwIsReceiving() { return device_is_ready(_dev) && _ops.is_receiving && _ops.is_receiving(_dev); }
 	void hwSetRxBoost(bool enable)
 	{
-		if (_ops.set_rx_boost) {
+		if (device_is_ready(_dev) && _ops.set_rx_boost) {
 			_ops.set_rx_boost(_dev, enable);
 		}
 	}
@@ -185,7 +191,7 @@ private:
 	 *         <0 = error / unsupported. */
 	int hwCadProbe(int8_t level)
 	{
-		return _ops.cad_probe ? _ops.cad_probe(_dev, level) : -ENOSYS;
+		return device_is_ready(_dev) && _ops.cad_probe ? _ops.cad_probe(_dev, level) : -ENOSYS;
 	}
 	/* Outcome of the RX a probe == 2 left the chip in: 1 = a packet
 	 * completed, 2 = the Rx timed out with nothing decoded, 0 = not armed or
@@ -200,7 +206,7 @@ private:
 	 * and the driver's detPeak clamp (0/0 = none). */
 	void hwCadSetPeakOffset(int8_t offset) override
 	{
-		if (_ops.cad_set_peak_offset) {
+		if (device_is_ready(_dev) && _ops.cad_set_peak_offset) {
 			_ops.cad_set_peak_offset(_dev, offset);
 		}
 	}
@@ -212,9 +218,9 @@ private:
 	 * so the caller's startReceive() is a real re-entry. Only the SX126x has
 	 * the jammed-AGC fault; only the LR families specify drift recalibration. */
 	bool hwNeedsAgcReset() const { return _ops.reset_agc != nullptr; }
-	void hwResetAgc() { if (_ops.reset_agc) { _ops.reset_agc(_dev); } }
+	void hwResetAgc() { if (device_is_ready(_dev) && _ops.reset_agc) { _ops.reset_agc(_dev); } }
 	bool hwHasDriftRecal() const { return _ops.recalibrate != nullptr; }
-	void hwRecalibrate() { if (_ops.recalibrate) { _ops.recalibrate(_dev); } }
+	void hwRecalibrate() { if (device_is_ready(_dev) && _ops.recalibrate) { _ops.recalibrate(_dev); } }
 
 	/* Deaf time per duty-cycle wake (context restore + PLL + TCXO start), in
 	 * us, counted against the catch budget (DS §13.1.7). 1500 suits XTAL
@@ -238,6 +244,11 @@ private:
 
 	const struct device *_dev;
 	NodePrefs *_prefs;
+	RecoverySave _recovery_save = nullptr;
+	void *_recovery_context = nullptr;
+	bool _recovery_armed = false;
+	bool _startup_ready = false;
+	int _last_hw_error = 0;
 	MainBoard *_board;
 	atomic_t _in_recv_mode;
 	atomic_t _tx_active;

@@ -646,6 +646,31 @@
       "id": "UNIT-BUDGET-004",
       "name": "Power budget persists in both JSON roles without changing legacy bytes",
       "source": "tests/unit/prefs_json_tests.cpp"
+    },
+    {
+      "id": "UNIT-RECOVERY-001",
+      "name": "Only startup confirmation establishes a last-known-good modem configuration",
+      "source": "tests/unit/recovery_tests.cpp"
+    },
+    {
+      "id": "UNIT-RECOVERY-002",
+      "name": "Three incomplete startups restore only the unchanged failed modem candidate",
+      "source": "tests/unit/recovery_tests.cpp"
+    },
+    {
+      "id": "UNIT-RECOVERY-003",
+      "name": "Corrupt backups and changed candidates cannot trigger an unrelated rollback",
+      "source": "tests/unit/recovery_tests.cpp"
+    },
+    {
+      "id": "UNIT-RECOVERY-004",
+      "name": "Startup failures without a confirmed backup saturate without inventing defaults",
+      "source": "tests/unit/recovery_tests.cpp"
+    },
+    {
+      "id": "UNIT-RECOVERY-005",
+      "name": "Recovery checkpoint round trips in JSON while legacy bytes stay frozen",
+      "source": "tests/unit/prefs_json_tests.cpp"
     }
   ]
 }

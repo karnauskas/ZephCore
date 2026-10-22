@@ -11,6 +11,7 @@
 #include <stdint.h>
 #include <string.h>
 #include "LoRaConfig.h"
+#include "RadioCheckpoint.h"
 
 /* LEDS_RADIO_* / LEDS_HB_* mode values for the leds_radio_mode and leds_hb_mode
  * fields below.  They live in led_gate.h because the heartbeat consumers are C
@@ -68,6 +69,7 @@
 #define TZ_OFFSET_MAX   14
 
 struct NodePrefs {
+	RadioCheckpoint radio_checkpoint; // JSON-only startup recovery state
 	/* ---- Common fields (both roles) ---- */
 	float airtime_factor;
 	char node_name[32];

@@ -486,6 +486,9 @@ static void refresh_ui_radio_state(void)
 /* Server event loop */
 static void server_event_loop(void)
 {
+#ifdef ZEPHCORE_LORA
+	lora_radio.bootComplete();
+#endif
 	LOG_INF("starting event-driven loop");
 
 	/* Print startup banner (no prompt - Arduino style) */
@@ -721,7 +724,9 @@ int server_main(const ServerRole &role)
 	 * Every role binds this way; begin() refuses to start without it. */
 	data_store.loadPrefs(*role.prefs);
 	power_budget_bind(zephyr_board, *role.prefs);
-	lora_radio.setPrefs(role.prefs);
+	lora_radio.setPrefs(role.prefs, [](const NodePrefs &p, void *ctx) {
+		return static_cast<RepeaterDataStore *>(ctx)->savePrefs(p);
+	}, &data_store);
 
 	/* LED gate and GPS duty from prefs.  After loadPrefs() and ui_init(),
 	 * before begin() -- see boot_prefs.h. */

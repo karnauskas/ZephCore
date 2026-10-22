@@ -398,7 +398,9 @@ int main(void)
 
 	/* Bind the radio to the mesh's NodePrefs before begin(): the radio reads
 	 * freq/bw/sf/cr through this pointer at begin() and on every reconfigure. */
-	lora_radio.setPrefs(observer_mesh.getNodePrefs());
+	lora_radio.setPrefs(observer_mesh.getNodePrefs(), [](const NodePrefs &p, void *ctx) {
+		return static_cast<RepeaterDataStore *>(ctx)->savePrefs(p);
+	}, &data_store);
 
 	/* Initialize and start mesh (loads prefs + identity from flash) */
 	s_mesh_ptr = &observer_mesh;
@@ -470,6 +472,7 @@ int main(void)
 
 	LOG_INF("Observer event loop running");
 
+	lora_radio.bootComplete();
 	/* ========== Event loop ========== */
 	for (;;) {
 		uint32_t ev = k_event_wait(&mesh_events, MESH_EVENT_ALL,

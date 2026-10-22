@@ -18,3 +18,4 @@ restructure; most describe decisions taken earlier. The system view is in [../DE
 | [0011](0011-lithuania-radio-defaults.md) | Match Atviras Tinklas radio defaults |
 | [0012](0012-clock-fusion-diagnostics.md) | Add drift and confidence to mesh clock fusion |
 | [0013](0013-adaptive-power-budget.md) | Opt-in adaptive power budget |
+| [0014](0014-radio-startup-recovery.md) | Validate startup and retain last-known-good modem configuration |

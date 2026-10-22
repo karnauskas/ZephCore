@@ -1444,6 +1444,43 @@ Everything below is software: bounded stall detection in the layer that owns the
 state machine. Each entry names what it recovers, because several are
 deliberately diagnostic-only and recover nothing.
 
+### 15.0 Radio startup validation and modem rollback
+
+The common `LoRaRadio` startup path requires a ready Zephyr driver, successful
+modem configuration, and successful RX arming before reporting `radio started`.
+Configuration failure stops RX arming; TX configuration failure unwinds its
+activity/PM bookkeeping without sending. Failed-device paths do not issue
+configuration, cancel, gain, CAD-offset, or calibration writes. These are driver
+API checks, not an RF loopback or a guarantee of mesh connectivity.
+
+`helpers/RadioRecovery.h` tracks a last-known-good modem configuration in
+`prefs.json` under `zc.radio_good`: frequency, bandwidth, SF, CR, TX power,
+a checksum, candidate fingerprint, pending flag and saturated attempt count.
+The composition roots bind a checked save callback before radio startup. A
+startup attempt is persisted before applying the modem configuration; entering
+the role's event loop after RX startup confirms it and promotes those five
+fields to the last-known-good snapshot. This adds two atomic prefs writes per
+normal boot. Companion `ZephyrDataStore::savePrefs()` now returns its actual
+write result so checkpoint durability is observable.
+
+Three incomplete starts of the same candidate restore a valid, different
+snapshot before the next attempt. An explicit `-EINVAL`/`-ENOTSUP` modem-config
+rejection also permits one restore/configure attempt during startup, after the
+restored preferences are saved. I/O failures, RX-arming failures and an unready
+device do not cause speculative reinitialization or default-config replacement.
+Without a valid snapshot, report failure and leave settings available for local
+repair. Unrelated preferences, identity, contacts and channels are never reset.
+A failed save is reported; no durable protection is claimed without one.
+
+The checkpoint covers startup from the radio's `begin()` until the main event
+loop; bootloader/early driver-init crashes before this checkpoint are outside
+its scope. Power interruption or deliberate reset inside that window also
+counts as an incomplete start. A valid but wrong network channel can pass the
+startup check; there is no traffic-based rollback. Recovery operates on startup,
+not every live configuration change. KISS uses shared startup checks but does
+not persist node preferences, so it has no durable rollback snapshot. No new
+hardware watchdog or reset loop is added. See [ADR 0014](adr/0014-radio-startup-recovery.md).
+
 ### 15.1 Named watchdogs
 
 | Watchdog | Location | Period | Trigger → action |

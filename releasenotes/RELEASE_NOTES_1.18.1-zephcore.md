@@ -43,3 +43,13 @@ intervals as battery reserve falls. Low reserve also reduces repeated sensor
 work by allowing telemetry/UI reads to reuse readings for up to one or five
 minutes. It defaults to off; forwarding, manual adverts and low-battery
 protection keep their behavior. Use `get power.budget` to see the current factor.
+
+## Radio startup recovery
+
+Startup now reports success only after modem configuration and RX arming succeed.
+Companion and server roles retain the last modem configuration that completed
+startup. Three incomplete boots of the same candidate restore that snapshot;
+driver-rejected modem settings permit one startup rollback attempt. Identity
+and unrelated preferences are retained. Existing SX126x software recovery stays
+in place; there is no hardware watchdog. Hardware fault-injection validation
+remains outstanding; see `docs/MILESTONE_1_RECOVERY.md` for scope and acceptance.

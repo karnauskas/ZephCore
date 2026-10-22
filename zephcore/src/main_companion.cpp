@@ -123,6 +123,9 @@ static struct k_event mesh_events;
 static void process_companion_rx(void);   /* runs on MAIN thread (see link_on_rx) */
 static void run_contact_iteration(void);  /* runs on MAIN thread (see MESH_EVENT_CONTACT_ITER) */
 static void housekeeping_timer_fn(struct k_timer *timer);
+#ifdef ZEPHCORE_LORA
+static void radio_boot_complete(void);
+#endif
 #if ZEPHCORE_USB_STACK
 static void companion_cli_run(const char *line);  /* main-thread text-CLI exec */
 #endif
@@ -384,6 +387,9 @@ static void mesh_event_loop(void)
 	mesh_thread = k_current_get();
 #endif
 
+#ifdef ZEPHCORE_LORA
+	radio_boot_complete();
+#endif
 	k_timer_start(&housekeeping_timer, K_MSEC(HOUSEKEEPING_INTERVAL_MS),
 		      K_MSEC(HOUSEKEEPING_INTERVAL_MS));
 
@@ -562,6 +568,7 @@ static mesh::ZephyrBoard zephyr_board;
 /* main() binds the radio to companion_mesh.prefs (setPrefs) before begin(). */
 static const struct device *const lora_dev = DEVICE_DT_GET(DT_ALIAS(lora0));
 static mesh::LoRaRadio lora_radio(lora_dev, zephyr_board);
+static void radio_boot_complete(void) { lora_radio.bootComplete(); }
 
 static uint16_t get_battery_mv(void)
 {
@@ -1034,7 +1041,9 @@ int main(void)
 #endif
 
 	/* The radio reads its preset through this from Radio::begin() on. */
-	lora_radio.setPrefs(&companion_mesh.prefs);
+	lora_radio.setPrefs(&companion_mesh.prefs, [](const NodePrefs &p, void *ctx) {
+		return static_cast<ZephyrDataStore *>(ctx)->savePrefs(p);
+	}, &data_store);
 
 	data_store.loadContacts(&companion_mesh);
 	data_store.loadChannels(&companion_mesh);
