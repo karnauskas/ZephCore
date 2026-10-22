@@ -52,12 +52,27 @@ public:
 };
 
 /* zc{}: ZephCore's own settings, common to both roles */
+class RadioCheckpointJson : public ConfigSerializer {
+	RadioCheckpoint *_c;
+protected:
+	void structure() override {
+		def("freq", _c->freq); def("bw", _c->bw);
+		def("sf", _c->sf); def("cr", _c->cr); def("tx", _c->power);
+		def("check", _c->checksum); def("candidate", _c->candidate);
+		def("pending", _c->pending); def("attempts", _c->attempts);
+	}
+public:
+	explicit RadioCheckpointJson(RadioCheckpoint *c) : _c(c) {}
+};
+
 class ZcCommonJson : public ConfigSerializer {
+	RadioCheckpointJson _recovery;
 protected:
 	NodePrefs *_p;
 
 	void structure() override
 	{
+		def("radio_good", _recovery);
 		def("power_budget", _p->adaptive_power);
 		def("leds_off", _p->leds_disabled);
 		def("leds_radio", _p->leds_radio_mode);
@@ -78,7 +93,7 @@ protected:
 	}
 
 public:
-	explicit ZcCommonJson(NodePrefs *p) : _p(p) {}
+	explicit ZcCommonJson(NodePrefs *p) : _recovery(&p->radio_checkpoint), _p(p) {}
 };
 
 /* ── Companion: upstream examples/companion_radio/NodePrefs.h ──────── */

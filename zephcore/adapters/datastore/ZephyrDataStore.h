@@ -30,7 +30,7 @@ public:
 	bool loadMainIdentity(mesh::LocalIdentity &identity);
 	bool saveMainIdentity(const mesh::LocalIdentity &identity);
 	void loadPrefs(NodePrefs &prefs);
-	void savePrefs(const NodePrefs &prefs);
+	bool savePrefs(const NodePrefs &prefs);
 	void loadContacts(DataStoreHost *host);
 	void saveContacts(DataStoreHost *host);
 	void loadChannels(DataStoreHost *host);
