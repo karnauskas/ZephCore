@@ -357,3 +357,13 @@ TEST(prefs_tz_text, "UNIT-PREFS-012", "Timezone offset text: exact decimal hours
         CHECK(std::strlen(l) <= 8);
     }
 }
+
+TEST(prefs_atvirastinklas, "UNIT-PREFS-013", "Factory defaults match Atviras Tinklas EU UK Narrow") {
+	NodePrefs p = defaults();
+	CHECK(p.freq == 869.618f);
+	CHECK(p.bw == 62.5f);
+	CHECK(p.sf == 8);
+	CHECK(p.cr == 8);
+	CHECK(p.airtime_factor == 9.0f);
+	CHECK(p.path_hash_mode == 1);
+}
