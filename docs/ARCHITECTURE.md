@@ -749,6 +749,44 @@ waits 1 s; otherwise it stores the reason (`Low Voltage`) for the next boot. The
 UI only draws the warning (`ui_show_low_battery()`). A stored 3300 mV (the old
 default) is migrated to 3200 once (`zc.aoff_set`).
 
+### 6.2.1 Adaptive power budget
+
+`helpers/PowerBudget.{h,cpp}` is a shared, main-thread policy bound to each
+composition root's board and live preferences. `set power.budget on|off|default`
+(default off, JSON-only `zc.power_budget`) enables it on companions and servers;
+`get power.budget` reports the flag and current interval multiplier. Observer
+uses the same setting through its own CLI. KISS has no periodic adverts or GPS
+acquisition and keeps the default off.
+
+Reserve uses the existing board-specific battery curve. At ≤20% the multiplier
+is 2; at ≤10% it is 4. Each transition needs three consecutive samples at least
+30 seconds apart. Recovery thresholds are 15% out of critical and 25% back to
+normal. Detected external power or voltage below 2000 mV resets the multiplier
+at the next sample. Disabling the setting resets it on the next policy call.
+Boards unable to identify external power rely on battery voltage/curve alone.
+Sampling rides existing event-loop wakes; it adds no periodic wake or polling.
+A quiet server may therefore take longer to confirm a reserve transition.
+
+The multiplier scales periodic repeater/room local and flood advert delays,
+composes multiplicatively with network-adaptive adverts, and extends GPS
+standby intervals in their common manager. Zero/disabled intervals stay zero;
+manual adverts, forwarding, requested replies, battery alerts and auto-shutdown
+retain their policy. Effective intervals are capped at `INT32_MAX` milliseconds
+to stay within wrap-safe deadline comparisons. Current timers complete before
+the next scheduling decision; configured baseline preferences are never rewritten.
+
+Telemetry is request-driven. The common environment/power sensor reader caches
+successful nonempty readings for up to 60 seconds at factor 2 or 300 seconds at
+factor 4. This reduces repeated sensor acquisition for telemetry and optional
+UI work without changing channel numbering, permission checks or reply format.
+An expired sample is invalidated before a fresh fetch; a failed fetch does not
+serve the old value. Normal/disabled mode bypasses the cache. Battery protection
+reads are separate and stay current. GPS always-on mode stays always on.
+
+The fixed cache costs 704 bytes for 16 sensor slots when sensor support is built;
+the singleton and preference alignment add a small fixed cost. No heap is used.
+See [ADR 0013](adr/0013-adaptive-power-budget.md).
+
 ### 6.3 RepeaterMesh
 
 Autonomous operation features:

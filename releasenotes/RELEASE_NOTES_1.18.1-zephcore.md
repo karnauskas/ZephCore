@@ -35,3 +35,11 @@ and a median drift estimate relative to local uptime. Drift needs at least
 24 hours of observations from a quorum of agreeing nodes. Existing consensus,
 outlier rejection and clock-correction limits remain in place; these new fields
 are diagnostic and available while synchronization is disabled.
+
+## Adaptive power budget
+
+Enable `set power.budget on` to lengthen periodic mesh advert and GPS standby
+intervals as battery reserve falls. Low reserve also reduces repeated sensor
+work by allowing telemetry/UI reads to reuse readings for up to one or five
+minutes. It defaults to off; forwarding, manual adverts and low-battery
+protection keep their behavior. Use `get power.budget` to see the current factor.

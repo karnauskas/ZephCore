@@ -626,6 +626,26 @@
       "id": "UNIT-SYNC-018",
       "name": "Drift uses unsigned uptime deltas across wrap",
       "source": "tests/unit/timesync_tests.cpp"
+    },
+    {
+      "id": "UNIT-BUDGET-001",
+      "name": "Reserve bands confirm three samples and recover with hysteresis",
+      "source": "tests/unit/power_budget_tests.cpp"
+    },
+    {
+      "id": "UNIT-BUDGET-002",
+      "name": "Disabled external power absent battery and alternating readings preserve normal service",
+      "source": "tests/unit/power_budget_tests.cpp"
+    },
+    {
+      "id": "UNIT-BUDGET-003",
+      "name": "Sensor samples expire at the bound and invalidation and uptime wrap are safe",
+      "source": "tests/unit/power_budget_tests.cpp"
+    },
+    {
+      "id": "UNIT-BUDGET-004",
+      "name": "Power budget persists in both JSON roles without changing legacy bytes",
+      "source": "tests/unit/prefs_json_tests.cpp"
     }
   ]
 }

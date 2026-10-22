@@ -215,3 +215,16 @@ TEST(adaptive_json, "UNIT-ADAPTIVE-003", "Adaptive adverts persist only in serve
     CHECK(serverPrefsFromJson(loaded, invalid));
     CHECK(loaded.adaptive_advert == 0);
 }
+
+TEST(power_json, "UNIT-BUDGET-004", "Power budget persists in both JSON roles without changing legacy bytes") {
+	NodePrefs p = defaults();
+	CHECK(p.adaptive_power == 0);
+	auto comp = companionBytes(p), server = serverBytes(p);
+	p.adaptive_power = 1;
+	CHECK(companionBytes(p) == comp && serverBytes(p) == server);
+	MemStream c, s;
+	CHECK(companionPrefsToJson(p, c) && serverPrefsToJson(p, s));
+	NodePrefs q = defaults(), r = defaults();
+	CHECK(companionPrefsFromJson(q, c) && serverPrefsFromJson(r, s));
+	CHECK(q.adaptive_power == 1 && r.adaptive_power == 1);
+}

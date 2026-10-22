@@ -1,3 +1,4 @@
+#include <helpers/PowerBudget.h>
 /*
  * SPDX-License-Identifier: MIT
  * ZephCore Observer — listen-only LoRa node with WiFi+MQTT forwarding.
@@ -405,6 +406,7 @@ int main(void)
 
 	/* Generate a default node name based on pubkey if still generic */
 	NodePrefs *prefs = observer_mesh.getNodePrefs();
+	power_budget_bind(s_board, *prefs);
 	/* "Observer" is deliberately NOT in this list: it is a name a user can set,
 	 * and regenerating it here made `set name Observer` silently revert on every
 	 * reboot.  "Repeater" is the name the shared store wrote on first boot
@@ -473,6 +475,7 @@ int main(void)
 		uint32_t ev = k_event_wait(&mesh_events, MESH_EVENT_ALL,
 					   false, K_FOREVER);
 		k_event_clear(&mesh_events, ev);
+		(void)power_budget_factor();
 
 		if (ev & MESH_EVENT_LORA_RX) {
 			observer_mesh.loop();

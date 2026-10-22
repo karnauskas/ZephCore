@@ -1,3 +1,4 @@
+#include <helpers/PowerBudget.h>
 /*
  * SPDX-License-Identifier: MIT
  * ZephCore - KISS modem
@@ -210,6 +211,7 @@ int main(void)
 	}
 
 	initNodePrefs(&prefs);
+	power_budget_bind(board, prefs);
 	apply_boot_prefs(&prefs, false);
 	gps_park();
 	env_sensors_init();
@@ -258,6 +260,7 @@ int main(void)
 		uint32_t ev = k_event_wait(&mesh_events, MESH_EVENT_ALL, false, K_FOREVER);
 
 		k_event_clear(&mesh_events, ev);
+		(void)power_budget_factor();
 	}
 
 	return 0;

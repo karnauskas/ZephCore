@@ -1,3 +1,4 @@
+#include <helpers/PowerBudget.h>
 /*
  * SPDX-License-Identifier: MIT
  * Zephyr Environment & Power Sensors
@@ -51,6 +52,7 @@ struct sensor_entry {
 /* Worst case: every part present, INA3221 as three. */
 #define MAX_SENSORS 16
 static struct sensor_entry s_sensors[MAX_SENSORS];
+static BudgetSample<env_sensor_reading> s_samples[MAX_SENSORS];
 static uint8_t s_count;
 
 /* Is this sensor usable? A node marked zephyr,deferred-init (a part behind a
@@ -192,6 +194,10 @@ int env_sensor_read(int index, struct env_sensor_reading *r)
 	if (index < 0 || index >= s_count) {
 		return -EINVAL;
 	}
+	uint32_t now = uint32_t(k_uptime_get());
+	uint32_t age = power_budget_sensor_age_ms();
+	if (s_samples[index].get(now, age, *r)) return 0;
+	s_samples[index].clear();
 	const struct sensor_entry *e = &s_sensors[index];
 
 	if (e->kind == KIND_POWER_3221) {
@@ -251,6 +257,7 @@ int env_sensor_read(int index, struct env_sensor_reading *r)
 		}
 		break;
 	}
+	if (r->fields) s_samples[index].put(now, *r);
 	return 0;
 #else
 	ARG_UNUSED(index);

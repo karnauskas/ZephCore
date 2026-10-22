@@ -1,3 +1,4 @@
+#include <helpers/PowerBudget.h>
 /*
  * SPDX-License-Identifier: MIT
  * ZephCore companion: composition root and mesh event loop.
@@ -389,6 +390,7 @@ static void mesh_event_loop(void)
 	for (;;) {
 		uint32_t events = k_event_wait(&mesh_events, MESH_EVENT_ALL, false, K_FOREVER);
 		k_event_clear(&mesh_events, events);
+		(void)power_budget_factor();
 		loopWakeNote(events);
 
 		/* TX-idle resumes both the retained reply and commands left in RX.
@@ -1011,6 +1013,7 @@ int main(void)
 	companion_mesh.prefs.gps_interval = CONFIG_ZEPHCORE_GPS_POLL_INTERVAL_SEC; /* 0 = always on */
 
 	data_store.loadPrefs(companion_mesh.prefs);
+	power_budget_bind(zephyr_board, companion_mesh.prefs);
 	/* A repeat flag stored on a non-off-grid frequency is dropped. */
 	if (mesh::offgridNormalize(companion_mesh.prefs)) {
 		LOG_WRN("offgrid mode dropped: not on an off-grid frequency");

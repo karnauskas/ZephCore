@@ -1,3 +1,4 @@
+#include <helpers/PowerBudget.h>
 /*
  * SPDX-License-Identifier: MIT
  * CommonCLI - Common CLI command handlers for repeaters
@@ -1018,6 +1019,9 @@ void CommonCLI::handleGetCmd(uint32_t sender_timestamp, const char* command, cha
 	} else if (strcmp(config, "advert.adaptive") == 0) {
 		snprintf(reply, CLI_REPLY_SIZE, "> %s", _prefs->adaptive_advert ? "on" : "off");
 #endif
+	// ZEPHCORE: common reserve policy.
+	} else if (strcmp(config, "power.budget") == 0) {
+		snprintf(reply, CLI_REPLY_SIZE, "> %s factor=%u", _prefs->adaptive_power ? "on" : "off", power_budget_factor());
 	} else if (memcmp(config, "flood.advert.interval", 21) == 0) {
 		snprintf(reply, CLI_REPLY_SIZE, "> %u", (uint32_t)_prefs->flood_advert_interval);
 	} else if (memcmp(config, "advert.interval", 15) == 0) {
@@ -1447,6 +1451,18 @@ void CommonCLI::handleSetCmd(uint32_t sender_timestamp, const char* command, cha
 			strcpy(reply, "OK");
 		}
 #endif
+	// ZEPHCORE: JSON-only, configured intervals remain baselines.
+	} else if (memcmp(config, "power.budget ", 13) == 0) {
+		int on = cliOnOff(&config[13], cliDefaults()->adaptive_power);
+		if (on < 0) {
+			strcpy(reply, "Error: must be on, off or default");
+		} else {
+			_prefs->adaptive_power = (uint8_t)on;
+			_callbacks->updateAdvertTimer();
+			_callbacks->updateFloodAdvertTimer();
+			savePrefs();
+			strcpy(reply, "OK");
+		}
 	} else if (memcmp(config, "flood.advert.interval ", 22) == 0) {
 		long hours;
 		if (!cliNum(&config[22], cliDefaults()->flood_advert_interval, &hours)) {

@@ -543,3 +543,18 @@ measures mesh-source agreement and freshness, not UTC accuracy. Drift is the
 median rate of a quorum of agreeing sources observed over at least 24 hours,
 relative to local uptime. Both are available during dry-run and are diagnostic;
 clock stepping policy is unchanged. See [Mesh Time Sync](MESHTIMESYNC.md).
+
+### Adaptive power budget
+
+`set power.budget on|off|default` enables reserve-based scheduling (default off).
+`get power.budget` reports on/off and `factor=1|2|4`. The setting persists only in
+`prefs.json` as `zc.power_budget` and is available through companion/server CLI
+and the observer CLI.
+
+At ≤20% reserve, scheduled advert and GPS intervals double; at ≤10%, they
+quadruple. Three consecutive samples, at least 30 seconds apart, confirm a
+transition. Recovery thresholds are 15% and 25%. Environment/power telemetry and
+UI sensor reads may reuse readings up to 60 or 300 seconds old, respectively.
+Telemetry replies and manual adverts remain available. Existing timers finish;
+new scheduling decisions use the current factor. Zero intervals remain zero.
+External power, when detectable, and absent batteries select normal operation.

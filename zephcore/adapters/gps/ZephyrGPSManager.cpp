@@ -1,3 +1,4 @@
+#include <helpers/PowerBudget.h>
 /*
  * SPDX-License-Identifier: MIT
  * Zephyr GPS Manager - GNSS power management, fix acquisition, constellation config
@@ -515,7 +516,7 @@ static void gps_go_to_standby(void)
 	/* Unified standby interval for both roles — set from prefs.gps_interval
 	 * at boot (companion default 300s, repeater default 48h). Always-on
 	 * (interval 0) never reaches here. */
-	uint64_t wake_interval = gps_wake_interval_ms;
+	uint64_t wake_interval = power_budget_scale(gps_wake_interval_ms);
 
 	LOG_INF("GPS: Going to standby for %llu s%s",
 		(unsigned long long)(wake_interval / 1000),
@@ -1025,8 +1026,8 @@ void gps_set_poll_interval_sec(uint32_t interval)
 		} else {
 			/* The wake is re-armed from now, so the countdown restarts too. */
 			standby_start_ms = k_uptime_get();
-			standby_interval_ms = gps_wake_interval_ms;
-			k_work_reschedule(&gps_wake_work, K_MSEC(gps_wake_interval_ms));
+			standby_interval_ms = power_budget_scale(gps_wake_interval_ms);
+			k_work_reschedule(&gps_wake_work, K_MSEC(standby_interval_ms));
 		}
 	}
 #else

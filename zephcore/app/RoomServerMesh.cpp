@@ -1,3 +1,4 @@
+#include <helpers/PowerBudget.h>
 #include "RoomServerMesh.h"
 
 // ZEPHCORE: platform includes and helpers.
@@ -833,8 +834,8 @@ void RoomServerMesh::sendSelfAdvertisement(int delay_millis, bool flood) {
 
 // ZEPHCORE: shared policy; a new identity can advance enabled timers only.
 uint32_t RoomServerMesh::advertDelay(uint32_t base) const {
-  return _prefs.adaptive_advert
-      ? _adaptive_advert.interval(base, (uint32_t)k_uptime_get(), getContentionEstimate()) : base;
+  return power_budget_scale(_prefs.adaptive_advert
+      ? _adaptive_advert.interval(base, (uint32_t)k_uptime_get(), getContentionEstimate()) : base);
 }
 
 void RoomServerMesh::advertHeard(const mesh::Identity& id) {

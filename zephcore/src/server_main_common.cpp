@@ -1,3 +1,4 @@
+#include <helpers/PowerBudget.h>
 /*
  * SPDX-License-Identifier: MIT
  * ZephCore - shared composition root of the server roles (USB CLI, Event-Driven)
@@ -499,6 +500,7 @@ static void server_event_loop(void)
 		/* Wait for any mesh event - blocks until signaled */
 		uint32_t events = k_event_wait(&mesh_events, MESH_EVENT_ALL, false, K_FOREVER);
 		k_event_clear(&mesh_events, events);
+		(void)power_budget_factor();
 		loopWakeNote(events);
 
 		/* GPS state transitions must run on main thread (GNSS driver
@@ -718,6 +720,7 @@ int server_main(const ServerRole &role)
 	 * settings: CLI readback looked correct but the hardware stayed on EU.
 	 * Every role binds this way; begin() refuses to start without it. */
 	data_store.loadPrefs(*role.prefs);
+	power_budget_bind(zephyr_board, *role.prefs);
 	lora_radio.setPrefs(role.prefs);
 
 	/* LED gate and GPS duty from prefs.  After loadPrefs() and ui_init(),
