@@ -27,3 +27,11 @@ Fresh configurations now use Atviras Tinklas's EU/UK (Narrow) preset:
 869.618 MHz, 62.5 kHz bandwidth, SF8 and coding rate 4/8. The defaults remain
 10% duty cycle and two-byte path hashes. Existing saved radio settings are
 retained; select EU/UK (Narrow) in the companion app to update those devices.
+
+## Mesh clock fusion diagnostics
+
+`get meshtimesync` now reports confidence in agreement between mesh sources
+and a median drift estimate relative to local uptime. Drift needs at least
+24 hours of observations from a quorum of agreeing nodes. Existing consensus,
+outlier rejection and clock-correction limits remain in place; these new fields
+are diagnostic and available while synchronization is disabled.

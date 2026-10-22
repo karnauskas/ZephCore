@@ -51,6 +51,7 @@ public:
 	static constexpr uint32_t MATURE_SILENT_EVICT_SECS = 24 * 3600;
 	static constexpr int64_t  CONSISTENCY_BASE_SECS    = 45;
 	static constexpr int64_t  CONSISTENCY_PPM          = 150;
+	static constexpr uint32_t DRIFT_MIN_SPAN_SECS      = 24 * 3600;
 	static constexpr uint32_t EVAL_INTERVAL_SECS       = 15 * 60;
 	static constexpr int64_t  DEAD_BAND_SECS           = 5 * 60;
 	static constexpr int64_t  STEP_TRIGGER_SECS        = 10 * 60;
@@ -73,6 +74,7 @@ public:
 		                            * evaluate time, so a local clock step
 		                            * never stales stored samples */
 		uint32_t first_uptime;     /* tenure start */
+		uint32_t first_advert_ts;  /* drift anchor, reset with tenure */
 		uint16_t count;            /* adverts this tenure */
 		uint8_t  hops;             /* precision hint only, never a trust signal */
 		uint8_t  used;
@@ -91,6 +93,8 @@ public:
 		REASON_PEDIGREE,      /* drift-envelope physics veto */
 	};
 
+	enum Confidence : uint8_t { CONFIDENCE_NONE, CONFIDENCE_LOW, CONFIDENCE_MEDIUM, CONFIDENCE_HIGH };
+
 	struct Consensus {
 		bool valid;            /* >= 1 eligible vote, intersection computed */
 		uint8_t eligible;
@@ -98,6 +102,10 @@ public:
 		uint8_t votes_against;
 		int64_t mid;           /* consensus skew midpoint (+ = our clock is behind) */
 		int32_t radius;        /* intersection half-width */
+		Confidence confidence; /* agreement of mesh sources, not UTC accuracy */
+		uint8_t drift_sources;
+		bool drift_valid;
+		int32_t drift_ppm;     /* agreeing senders relative to local uptime */
 	};
 
 	struct Verdict {

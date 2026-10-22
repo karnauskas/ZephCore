@@ -16,3 +16,4 @@ restructure; most describe decisions taken earlier. The system view is in [../DE
 | [0009](0009-wifi-companion-boards.md) | WiFi companion boards and contact counts |
 | [0010](0010-adaptive-advertisements.md) | Opt-in adaptive periodic mesh advertisements |
 | [0011](0011-lithuania-radio-defaults.md) | Match Atviras Tinklas radio defaults |
+| [0012](0012-clock-fusion-diagnostics.md) | Add drift and confidence to mesh clock fusion |

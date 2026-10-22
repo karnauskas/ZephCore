@@ -606,6 +606,26 @@
       "id": "UNIT-PREFS-011",
       "name": "Factory defaults match Atviras Tinklas EU UK Narrow",
       "source": "tests/unit/prefs_codec_tests.cpp"
+    },
+    {
+      "id": "UNIT-SYNC-015",
+      "name": "Confidence follows tenure quorum agreement and sample freshness",
+      "source": "tests/unit/timesync_tests.cpp"
+    },
+    {
+      "id": "UNIT-SYNC-016",
+      "name": "Median drift excludes timestamp outliers and does not depend on local clock steps",
+      "source": "tests/unit/timesync_tests.cpp"
+    },
+    {
+      "id": "UNIT-SYNC-017",
+      "name": "Drift needs a day of consistent observations and resets with tenure and reboot",
+      "source": "tests/unit/timesync_tests.cpp"
+    },
+    {
+      "id": "UNIT-SYNC-018",
+      "name": "Drift uses unsigned uptime deltas across wrap",
+      "source": "tests/unit/timesync_tests.cpp"
     }
   ]
 }

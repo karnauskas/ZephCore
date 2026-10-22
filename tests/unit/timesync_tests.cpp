@@ -205,3 +205,70 @@ TEST(timesync_reset, "UNIT-SYNC-014", "Reset discards evidence suppression count
     f.group(6, 1000, 3800, 7400); CHECK(!f.evaluate(7400)); // re-arm pacing
     CHECK(f.evaluate(8300)); // old suppression is gone
 }
+
+TEST(timesync_confidence, "UNIT-SYNC-015", "Confidence follows tenure quorum agreement and sample freshness") {
+	Fixture f;
+	CHECK(f.status(100).find("conf=none") != std::string::npos);
+	f.group(5, 0);
+	CHECK(f.status(3700).find("conf=low") != std::string::npos);
+	f.group(1, 0, 100, 3700, 6);
+	CHECK(f.status(3700).find("conf=high") != std::string::npos);
+	CHECK(f.status(4600).find("conf=high") != std::string::npos);
+	CHECK(f.status(4601).find("conf=medium") != std::string::npos);
+	f.group(1, 5000, 100, 3700, 7);
+	CHECK(f.status(3700).find("conf=medium") != std::string::npos);
+	CHECK(f.status(3700 + MeshTimeSync::MAX_SAMPLE_AGE_SECS + 1).find("conf=none") != std::string::npos);
+	Fixture boot(epoch);
+	boot.group(3, 10000, 100, 101);
+	CHECK(boot.sync.formatStatus(nullptr, 0, 0, 101, true) == 0);
+	char out[512];
+	boot.sync.formatStatus(out, sizeof(out), 0, 101, true);
+	CHECK(std::string(out).find("conf=low") != std::string::npos);
+}
+
+TEST(timesync_drift, "UNIT-SYNC-016", "Median drift excludes timestamp outliers and does not depend on local clock steps") {
+	Fixture f;
+	for (unsigned i = 1; i <= 6; ++i) {
+		f.advert(i, 0, 100);
+		f.advert(i, i <= 3 ? 0 : (i == 6 ? 30 : 20), 100100);
+	}
+	f.group(1, 5000, 100, 100100, 7);
+	CHECK(f.status(100100).find("drift=+100ppm/6") != std::string::npos);
+	f.advert(1, 0, 100); // replay cannot change the anchor
+	char out[1024];
+	f.sync.formatStatus(out, sizeof(out), epoch + 101100, 100100, false);
+	CHECK(std::string(out).find("drift=+100ppm/6") != std::string::npos);
+	CHECK(f.clock.sets == 0 && saved.empty());
+	Fixture slow;
+	for (unsigned i = 1; i <= 6; ++i) {
+		slow.advert(i, 0, 100);
+		slow.advert(i, -10, 100100);
+	}
+	CHECK(slow.status(100100).find("drift=-100ppm/6") != std::string::npos);
+}
+
+TEST(timesync_drift_reset, "UNIT-SYNC-017", "Drift needs a day of consistent observations and resets with tenure and reboot") {
+	Fixture f;
+	f.group(6, 0, 100, 86499);
+	CHECK(f.status(86499).find("drift=unknown/0") != std::string::npos);
+	for (unsigned i = 1; i <= 6; ++i) f.advert(i, 0, 86500);
+	CHECK(f.status(86500).find("drift=+0ppm/6") != std::string::npos);
+	f.advert(1, 1000, 86600);
+	CHECK(f.status(86600).find("drift=unknown/0") != std::string::npos);
+	f.sync.reset(0, false);
+	CHECK(f.status(86600).find("conf=none drift=unknown/0") != std::string::npos);
+}
+
+TEST(timesync_drift_wrap, "UNIT-SYNC-018", "Drift uses unsigned uptime deltas across wrap") {
+	MeshTimeSync sync;
+	uint32_t start = 0xffff0000u;
+	uint32_t end = start + 100000u;
+	for (unsigned i = 1; i <= 6; ++i) {
+		auto pub = key(i);
+		sync.onAdvertHeard(pub.data(), 2000000, 0, start);
+		sync.onAdvertHeard(pub.data(), 2100010, 0, end);
+	}
+	char out[1024];
+	sync.formatStatus(out, sizeof(out), 2100000, end, true);
+	CHECK(std::string(out).find("drift=+100ppm/6") != std::string::npos);
+}

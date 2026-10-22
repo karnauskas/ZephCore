@@ -96,6 +96,7 @@ void MeshTimeSync::onAdvertHeard(const uint8_t *pubkey, uint32_t advert_ts,
 			/* Sender rebooted, corrected itself, or is lying — re-earn
 			 * tenure from scratch. >150 ppm is beyond crystal physics. */
 			s->first_uptime = uptime_secs;
+			s->first_advert_ts = advert_ts;
 			s->count = 1;
 		} else if (s->count < 0xFFFF) {
 			s->count++;
@@ -137,6 +138,7 @@ void MeshTimeSync::onAdvertHeard(const uint8_t *pubkey, uint32_t advert_ts,
 	s->advert_ts = advert_ts;
 	s->arrival_uptime = uptime_secs;
 	s->first_uptime = uptime_secs;
+	s->first_advert_ts = advert_ts;
 	s->count = 1;
 	s->hops = hops;
 	s->used = 1;
@@ -204,6 +206,39 @@ MeshTimeSync::Consensus MeshTimeSync::computeConsensus(uint32_t local_time,
 	c.votes_against = (uint8_t)(n - best);
 	c.mid = (lo + hi) / 2;
 	c.radius = (int32_t)((hi - lo) / 2);
+	/* Drift is diagnostic: median rates of agreeing, day-long tenures. */
+	c.confidence = CONFIDENCE_LOW;
+	if (!bootstrap && n >= MESHTIMESYNC_QUORUM && best * 2 > n) {
+		c.confidence = CONFIDENCE_MEDIUM;
+		bool fresh = true;
+		int32_t rates[MESHTIMESYNC_TABLE_SIZE];
+		int nr = 0;
+		for (int i = 0; i < MESHTIMESYNC_TABLE_SIZE; ++i) {
+			const Slot &s = _slots[i];
+			if (!slotEligible(s, uptime_secs, false)) continue;
+			if (uint32_t(uptime_secs - s.arrival_uptime) > EVAL_INTERVAL_SECS) fresh = false;
+			int64_t skew = slotSkew(s, local_time, uptime_secs);
+			int32_t r = RADIUS_BASE_SECS + RADIUS_PER_HOP_SECS * s.hops;
+			if (skew - r > c.mid || skew + r < c.mid) continue;
+			uint32_t span = s.arrival_uptime - s.first_uptime;
+			if (span < DRIFT_MIN_SPAN_SECS) continue;
+			int64_t elapsed = int64_t(s.advert_ts) - s.first_advert_ts;
+			int32_t rate = (elapsed - span) * 1000000 / span;
+			int j = nr;
+			while (j > 0 && rates[j - 1] > rate) {
+				rates[j] = rates[j - 1];
+				--j;
+			}
+			rates[j] = rate;
+			++nr;
+		}
+		if (best == n && fresh) c.confidence = CONFIDENCE_HIGH;
+		c.drift_sources = nr;
+		if (nr >= MESHTIMESYNC_QUORUM) {
+			c.drift_valid = true;
+			c.drift_ppm = (int64_t(rates[(nr - 1) / 2]) + rates[nr / 2]) / 2;
+		}
+	}
 	return c;
 }
 
@@ -444,15 +479,23 @@ int MeshTimeSync::formatStatus(char *out, size_t cap, uint32_t local_time,
 		snprintf(verdict, sizeof(verdict), "abstain (%s)", reasonStr(v.reason));
 	}
 
+	static const char *const confidence[] = {"none", "low", "medium", "high"};
+	char drift[32];
+	if (c.drift_valid) {
+		snprintf(drift, sizeof(drift), "%+ldppm/%u", (long)c.drift_ppm, (unsigned)c.drift_sources);
+	} else {
+		snprintf(drift, sizeof(drift), "unknown/%u", (unsigned)c.drift_sources);
+	}
+
 	int pos = snprintf(out, cap,
-	                   "%s%s eligible=%u votes=%u/%u skew=%+lds r=%lds -> %s",
+	                   "%s%s eligible=%u votes=%u/%u skew=%+lds r=%lds -> %s conf=%s drift=%s",
 	                   enabled ? "on" : "off",
 	                   enabled ? "" : " (dry-run)",
 	                   (unsigned)c.eligible, (unsigned)c.votes_for,
 	                   (unsigned)c.votes_against,
 	                   c.valid ? clampl(c.mid) : 0L,
 	                   c.valid ? (long)c.radius : 0L,
-	                   verdict);
+	                   verdict, confidence[c.confidence], drift);
 	if (pos < 0 || (size_t)pos >= cap) goto full;
 
 	if (_steps > 0) {

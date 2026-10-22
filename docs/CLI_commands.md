@@ -534,3 +534,12 @@ Otherwise it is half the baseline for 10 minutes after hearing a new identity,
 then the baseline. Congestion takes priority. Hearing a new identity can bring
 an existing timer forward. The 16-identity FIFO treats evicted identities as new.
 Manual adverts are unchanged. Disabling the mode restores fixed schedules.
+
+### Mesh clock confidence and drift
+
+`get meshtimesync` now includes `conf=none|low|medium|high` and
+`drift=<signed ppm>/<source count>` or `drift=unknown/<count>`. Confidence
+measures mesh-source agreement and freshness, not UTC accuracy. Drift is the
+median rate of a quorum of agreeing sources observed over at least 24 hours,
+relative to local uptime. Both are available during dry-run and are diagnostic;
+clock stepping policy is unchanged. See [Mesh Time Sync](MESHTIMESYNC.md).

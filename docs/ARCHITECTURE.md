@@ -321,11 +321,11 @@ Direct (source-routed) packets bypass adaptive scaling entirely. They use minima
 
 ### 4.9 Mesh Time Sync (Clock Consensus)
 
-ZephCore-only divergence from Arduino MeshCore (like the Adaptive Contention Window). A node senses its own clock error from the Ed25519-signed timestamps in other nodes' adverts and — **opt-in, default off** (`set meshtimesync on`) — corrects it automatically. There is no trusted reference clock on a mesh, so this is a *consensus estimation* problem: the node assumes the majority of tenured advert senders within 3 flood hops is right. User-facing doc: `MESHTIMESYNC.md` at the repo root.
+ZephCore-only divergence from Arduino MeshCore (like the Adaptive Contention Window). A node senses its own clock error from the Ed25519-signed timestamps in other nodes' adverts and — **opt-in, default off** (`set meshtimesync on`) — corrects it automatically. There is no trusted reference clock on a mesh, so this is a *consensus estimation* problem: the node assumes the majority of tenured advert senders within 3 flood hops is right. User-facing doc: [MESHTIMESYNC.md](MESHTIMESYNC.md).
 
 **Module**: `helpers/MeshTimeSync.{h,cpp}` — role-agnostic estimator, owns no clock. Each role feeds it verified adverts (`onAdvertHeard`), calls `tick()` periodically (15-min pacing internal), and applies STEP verdicts under its own policy.
 
-**Sample table** (per-sender, `CONFIG_ZEPHCORE_TIMESYNC_TABLE_SIZE` slots: 32 default, 16 on RAM-bound companions; 24 B/slot):
+**Sample table** (per-sender, `CONFIG_ZEPHCORE_TIMESYNC_TABLE_SIZE` slots: 32 default, 16 on RAM-bound companions; 28 B/slot):
 - 8-byte pubkey prefix — a security floor, not a tuning knob (shorter prefixes are grindable: an attacker could collide a tenured voter's prefix and reset its tenure with validly-signed adverts).
 - Latest advert timestamp (= the vote, per-sender monotonic — replays and flood dupes are inert) + arrival **uptime**. Skew is recomputed at evaluate time from the uptime anchor, so the node's own steps never stale stored samples.
 - Tenure tracking: first-heard uptime, advert count. Eligibility = heard ≥ 1 h, ≥ 2 adverts, latest sample ≤ 5 days old (bridges the 47 h flood-advert cadence).
@@ -333,6 +333,26 @@ ZephCore-only divergence from Arduino MeshCore (like the Adaptive Contention Win
 - **Hop-priority admission** (hop cap 3): a new sender may only displace a young entry farther (higher hop) than it; mature entries are protected unless silent > 24 h. Naive LRU churned hub nodes to zero eligible voters in simulation.
 
 **Consensus**: Marzullo interval intersection over eligible votes, each `[skew − r, skew + r]` with `r = 150 s + 15 s × hop` (the 150 s base covers the real fleet's good-clock scatter, not just RF delay). No absolute outlier thresholds against the local clock — clustering does the rejection, so an epoch-reset clock still finds the true cluster. Stepping requires `CONFIG_ZEPHCORE_TIMESYNC_QUORUM` (default 6, floor 3, build-time security knob) eligible senders AND a strict majority inside the intersection; otherwise abstain.
+
+**Clock confidence and drift**: `get meshtimesync` adds `conf=none|low|medium|high`
+and `drift=<signed ppm>/<source count>` (or `unknown/<count>`). Confidence is
+agreement of the mesh estimate, not UTC accuracy: none without eligible data;
+low during bootstrap, below normal quorum or without a strict majority; medium
+with normal quorum and a strict majority; high when all eligible voters agree
+and every sample is at most one evaluation interval (15 min) old. These labels
+are independent of whether clock stepping is enabled or suppressed.
+
+Each slot also retains its tenure's first advert timestamp. Drift is the median
+of `(Δsender timestamp − Δlocal uptime) / Δlocal uptime × 10⁶`, using only
+normal-mode sources whose intervals contain the chosen consensus midpoint and
+whose observations span at least 24 hours. At least the configured quorum must
+supply rates. Positive means peers advance faster than local uptime. Tenure
+resets, slot replacement and reboot discard the associated drift anchor.
+Local wall-clock steps do not affect this estimate. Drift is diagnostic only;
+it does not alter vote projection, step decisions, or clock frequency. Sender
+corrections and variable radio delay can bias it. Extra persistent RAM is
+4 B/slot: 64 B for the default companion table and 128 B per server role;
+there is no heap allocation. See [ADR 0012](adr/0012-clock-fusion-diagnostics.md).
 
 **Correction policy** (priority: GPS / manual set > mesh consensus):
 - Any clock set — GPS fix **or** manual set (`time`, `clock sync`, app time set) — arms the same **7-day suppression** of all stepping, bootstrap included, plus drift-envelope pedigree (`noteGPSSync` and `noteManualSync` are identical). A live GPS re-arms it on every fix (so a repeater's 48 h duty cycle keeps GPS owning the clock); a GPS that cannot fix (indoors, dead antenna) becomes mesh-correctable once 7 days pass without a fix. Sensing always continues; a suppressed node shows `hold (suppressed)` in the dry-run.
