@@ -40,6 +40,10 @@ public:
   void markSeen(const mesh::Packet* packet) override {
     uint8_t hash[MAX_HASH_SIZE];
     packet->calculatePacketHash(hash);
+    // ZEPHCORE: keep one entry per hash without refreshing FIFO age or RX stats.
+    for (int i = 0; i < MAX_PACKET_HASHES; i++) {
+      if (memcmp(hash, &_hashes[i * MAX_HASH_SIZE], MAX_HASH_SIZE) == 0) return;
+    }
     memcpy(&_hashes[_next_idx * MAX_HASH_SIZE], hash, MAX_HASH_SIZE);
     _next_idx = (_next_idx + 1) % MAX_PACKET_HASHES;
   }

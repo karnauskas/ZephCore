@@ -566,6 +566,41 @@
       "id": "UNIT-KISS-005",
       "name": "msUntilNextTx reports each timed state and nothing while idle",
       "source": "tests/unit/kiss_modem_tests.cpp"
+    },
+    {
+      "id": "UNIT-ADAPTIVE-001",
+      "name": "Quiet discovery stable and congestion intervals",
+      "source": "tests/unit/adaptive_advert_tests.cpp"
+    },
+    {
+      "id": "UNIT-ADAPTIVE-002",
+      "name": "Identity cache eviction and uptime wrap",
+      "source": "tests/unit/adaptive_advert_tests.cpp"
+    },
+    {
+      "id": "UNIT-ADAPTIVE-003",
+      "name": "Adaptive adverts persist only in server JSON",
+      "source": "tests/unit/prefs_json_tests.cpp"
+    },
+    {
+      "id": "UNIT-DEDUP-001",
+      "name": "Repeated marking clears completely without counting duplicate receives",
+      "source": "tests/unit/dedup_tests.cpp"
+    },
+    {
+      "id": "UNIT-DEDUP-002",
+      "name": "Distinct packet FIFO is bounded and repeated marks neither evict nor refresh",
+      "source": "tests/unit/dedup_tests.cpp"
+    },
+    {
+      "id": "UNIT-DEDUP-003",
+      "name": "Changed payloads pass while route copies and identical ACKs deduplicate",
+      "source": "tests/unit/dedup_tests.cpp"
+    },
+    {
+      "id": "UNIT-DEDUP-004",
+      "name": "New table accepts pre-reboot packets and resetting stats preserves suppression",
+      "source": "tests/unit/dedup_tests.cpp"
     }
   ]
 }

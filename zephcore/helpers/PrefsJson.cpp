@@ -242,6 +242,7 @@ protected:
 		ZcCommonJson::structure();
 		def("tz_offset", _p->tz_offset);
 		def("backoff", _p->backoff_multiplier);
+		def("adaptive_adv", _p->adaptive_advert);
 		def("disc_ts", _p->discovery_mod_timestamp);
 		def("gps_set", _p->gps_enabled_set);
 	}

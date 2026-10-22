@@ -195,3 +195,23 @@ TEST(pjson_server_gps_upgrade, "UNIT-PJSON-008", "Server gps.en: a file without 
     CHECK(companionPrefsFromJson(c, comp));
     CHECK(c.gps_enabled == 0);
 }
+
+TEST(adaptive_json, "UNIT-ADAPTIVE-003", "Adaptive adverts persist only in server JSON") {
+    NodePrefs p = defaults();
+    CHECK(p.adaptive_advert == 0);
+    std::string legacy = serverBytes(p);
+    p.adaptive_advert = 1;
+    CHECK(serverBytes(p) == legacy);
+    MemStream stream;
+    CHECK(serverPrefsToJson(p, stream));
+    NodePrefs loaded = defaults();
+    CHECK(serverPrefsFromJson(loaded, stream));
+    CHECK(loaded.adaptive_advert == 1);
+    loaded = defaults();
+    MemStream old("{}");
+    CHECK(serverPrefsFromJson(loaded, old));
+    CHECK(loaded.adaptive_advert == 0);
+    MemStream invalid("{zc:{adaptive_adv:255}}");
+    CHECK(serverPrefsFromJson(loaded, invalid));
+    CHECK(loaded.adaptive_advert == 0);
+}

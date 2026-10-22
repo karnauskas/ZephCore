@@ -8,6 +8,7 @@
 #include <mesh/StaticPoolPacketManager.h>
 #include <mesh/SimpleMeshTables.h>
 #include <helpers/MeshTimeSync.h>
+#include <helpers/AdaptiveAdvert.h>
 #include <helpers/NodePrefs.h>
 #include "RepeaterDataStore.h"
 #if IS_ENABLED(CONFIG_ZEPHCORE_REPEATER_UPLINK)
@@ -90,6 +91,10 @@ class RepeaterMesh : public mesh::Mesh, public CommonCLICallbacks {
   unsigned long next_local_advert, next_flood_advert;
   bool _logging;
   NodePrefs _prefs;
+  // ZEPHCORE: shared periodic advertisement policy.
+  AdaptiveAdvert _adaptive_advert;
+  uint32_t advertDelay(uint32_t base) const;
+  void advertHeard(const mesh::Identity& id);
   ClientACL  acl;
   CommonCLI _cli;
   uint8_t reply_data[MAX_PACKET_PAYLOAD];

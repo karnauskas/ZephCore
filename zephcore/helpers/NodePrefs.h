@@ -125,6 +125,7 @@ struct NodePrefs {
 	 * their offsets in both legacy layouts; do not reuse. */
 	uint8_t _reserved_apc_enabled;
 	uint8_t _reserved_apc_margin;
+	uint8_t adaptive_advert;        // JSON-only, opt-in periodic advert scheduling
 	uint8_t meshtimesync;           // 1 = mesh time-sync clock correction on (default off)
 	uint8_t cad_auto;               // 1 = adaptive-CAD staircase acts on probe stats (default ON)
 	int8_t cad_offset;              // operating detPeak offset from family base (CAD_OFFSET_MIN..MAX, -8..+12)
@@ -315,6 +316,7 @@ static inline void sanitizeNodePrefs(NodePrefs* p) {
 	p->leds_radio_mode     = saneEnum(p->leds_radio_mode, LEDS_RADIO_MAX);
 	p->leds_hb_mode        = saneEnum(p->leds_hb_mode, LEDS_HB_MAX);
 	p->led_brightness      = clampPref<uint8_t>(p->led_brightness, 0, 100);
+	p->adaptive_advert = saneBool<uint8_t>(p->adaptive_advert, 0);
 	p->meshtimesync        = saneBool<uint8_t>(p->meshtimesync, 0);
 	/* Fallback must be the initNodePrefs() default (ON).  It was 0, so a byte
 	 * that was neither 0 nor 1 silently switched adaptive CAD off instead of

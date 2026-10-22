@@ -520,3 +520,17 @@ four radio parameters together, since they are one interop-critical set.
 - **Adaptive contention window** — `txdelay`, `rxdelay`, and `direct.txdelay` are accepted and stored for Arduino prefs compatibility but have no effect. Use `get txdelay` to inspect the current adaptive state and `set backoff.multiplier` to tune reactive backoff.
 - **Region load mode** — after `region load`, every line received is parsed as a region entry until a blank line is sent. The loaded map is only committed to the live region tree at that point; use `region save` to persist it. Region rows must be indented by at least one space, so an **unindented line that starts with a name character aborts the mode and is executed as a normal command** — the escape hatch if a `region load` is started by accident or a client dies mid-transfer. An abort discards the partial map, leaving the live region tree untouched. The exported wildcard header line `*` stays unindented and is ignored as before, so pasting the output of `region` still loads cleanly.
 - **Reboot delay** — `start dfu`, `start ota` (nRF52 BLE-DFU path only), `reboot`, `poweroff`, `clkreboot` and `erase` defer the reset by **2 seconds** so the reply can be transmitted over LoRa first. On a companion the handler then keeps deferring in 20 ms steps until the BLE/USB transport has drained, up to a further 3 s grace. On ESP32 `start ota` starts a WiFi AP + HTTP server and does **not** reboot.
+
+### Adaptive periodic mesh advertisements
+
+Repeater and room server: `set advert.adaptive on|off|default`,
+`get advert.adaptive`. Default is **off**. Stored in `prefs.json` under
+`zc.adaptive_adv`; the configured `advert.interval` and `flood.advert.interval`
+remain the baselines, and zero still disables that timer.
+
+Enabled: the next scheduled interval is twice the baseline when no verified
+non-share advert has been heard for 15 minutes, or contention is at least 4.
+Otherwise it is half the baseline for 10 minutes after hearing a new identity,
+then the baseline. Congestion takes priority. Hearing a new identity can bring
+an existing timer forward. The 16-identity FIFO treats evicted identities as new.
+Manual adverts are unchanged. Disabling the mode restores fixed schedules.

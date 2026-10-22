@@ -237,7 +237,7 @@ Path_len byte:
 
 **Direct routing**: Packet carries a source-routed `path[]`. Each relay node checks if the first path hash matches its own identity, removes itself, and forwards. Path is built from previous flood packets' accumulated hashes. Every forwarded direct packet, ACKs included (upstream 1.18.0), waits `getDirectRetransmitDelay()`; extra multi-ACKs and the final ACK are 300 ms apart.
 
-**Deduplication**: `SimpleMeshTables` maintains a circular buffer of 160 packet hashes (8 bytes each, SHA-256 truncated); ACKs are deduped through the same packet-hash path. `wasSeen()` is a pure query; call sites insert explicitly via `markSeen()` to prevent duplicate processing and retransmission.
+**Deduplication**: `SimpleMeshTables` maintains a circular buffer of 160 packet hashes (8 bytes each, SHA-256 truncated); ACKs are deduped through the same packet-hash path. `wasSeen()` updates duplicate counters but does not insert or refresh entries; call sites insert explicitly via `markSeen()`. Repeated marking of a retained hash is a no-op: it neither consumes another slot nor refreshes FIFO age, so `clear()` permits explicit reprocessing with one removal. Eviction remains capacity-only, with no TTL until a retention bound is measured. The cache is RAM-only and empty after reboot, allowing packets to be accepted again. Payload/type hashing and TRACE path-length handling remain unchanged; message retries with changed attempt data remain distinct, while byte-identical retries share the duplicate identity until cleared or evicted.
 
 ### 4.5 Dispatcher Scheduling
 
@@ -732,6 +732,7 @@ Autonomous operation features:
 - **Region filtering**: `RegionMap` with transport key matching per flood packet. Un-scoped floods (`mesh::isUnscopedFlood()`: plain floods, and transport floods with code 0 as upstream 1.18.0) go to the wildcard `*`, whose deny-flood flag and `flood.max.unscoped` apply to both; upstream exempts the code-0 case from both (LLD 02 section 16)
 - **Rate limiting**: 4 requests per 120s (discovery), 4 per 180s (anonymous), 4 failed logins per 180s
 - **Node discovery**: answers discovery requests only while forwarding is on. With `advert.interval` and `flood.advert.interval` both `0` the node is hidden and does not answer, as upstream (`isHiddenNode()`); the request still counts against the discovery rate limit
+- **Adaptive periodic adverts**: repeater and room server opt in with `set advert.adaptive on` (default off, `zc.adaptive_adv` in `prefs.json` only). Shared `helpers/AdaptiveAdvert.h` selects 2× the configured local/flood interval when no verified non-share advert has been heard for 15 minutes (including startup), or the contention estimate is ≥4; otherwise ½× for 10 minutes after a new identity, then 1×. Congestion takes priority. Decisions occur when timers are scheduled; a new identity can also advance a pending timer, never a due or disabled one. A 16-entry FIFO of full public keys uses 528 bytes per server role on 32-bit targets; an evicted identity counts as new when heard again. Quiet means absence of adverts, not absence of all radio traffic. No new periodic wakeups, packet format changes, or heap allocations; manual adverts and companion/observer behavior remain unchanged. See [ADR 0010](adr/0010-adaptive-advertisements.md).
 - **Neighbor tracking**: RSSI/SNR/name/timestamp table (`CONFIG_ZEPHCORE_MAX_NEIGHBOURS`, default 50 slots)
 - **Temporary radio params**: `tempradio` command applies freq/bw/sf/cr via `LoRaRadio::setRadioOverride()` (does not mutate `_prefs`); auto-revert timer calls `clearRadioOverride()` to fall back to saved prefs
 - **WiFi+MQTT uplink** (ESP32, `CONFIG_ZEPHCORE_REPEATER_UPLINK`): `RepeaterUplink.cpp` reports packets observer-style while still repeating; configured via `set uplink.*` CLI
@@ -1153,7 +1154,7 @@ Build strings: `docs/supported_boards.md`. Flash methods: `docs/BUILDING.md`. Ad
 | Heltec V4-R8 | ESP32-S3R8 | SX1262+PA (KCT8103L) | L76K (optional) | OLED (SSD1306) | 16MB flash, 8MB octal PSRAM |
 | Heltec Wireless Tracker | ESP32-S3 | SX1262 | UC6580 | TFT 160x80 (ST7735R) | - |
 | LilyGo T-Beam v1.2 | ESP32 (PICO-D4) | SX1262 | Yes | - | AXP2101 PMU; contacts capped at 160 |
-| TTGO LoRa32 | ESP32 (PICO-D4) | **SX1276** (loramac-node) | - | - | SX127x reference board |
+| LilyGo T-LoRa V2.1-1.6 (`ttgo_lora32`) | ESP32 (PICO-D4) | **SX1276** (loramac-node) | - | OLED (SSD1306) | GPIO0 button, GPIO25 LED, GPIO35 battery ADC; source-only |
 | XIAO MG24 | EFR32MG24 | SX1262 | - | - | - |
 | Seeed LoRa-E5 mini | STM32WL | STM32WL sub-GHz (SX1262-class) | - | - | UART companion/CLI; contacts capped at 24 |
 

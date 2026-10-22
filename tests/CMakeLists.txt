@@ -5,10 +5,12 @@ option(ZEPHCORE_TEST_SANITIZERS "Enable host address/undefined behavior sanitize
 set(PRODUCTION "${CMAKE_CURRENT_LIST_DIR}/../zephcore")
 add_executable(zephcore_unit
   unit/main.cpp
+  unit/dedup_tests.cpp
   unit/packet_tests.cpp
   unit/policy_tests.cpp
   unit/pool_tests.cpp
   unit/contention_tests.cpp
+  unit/adaptive_advert_tests.cpp
   unit/advert_tests.cpp
   unit/dispatcher_tests.cpp
   unit/identity_tests.cpp

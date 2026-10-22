@@ -1013,6 +1013,11 @@ void CommonCLI::handleGetCmd(uint32_t sender_timestamp, const char* command, cha
 	} else if (memcmp(config, "allow.read.only", 15) == 0) {
 		snprintf(reply, CLI_REPLY_SIZE, "> %s", _prefs->allow_read_only ? "on" : "off");
 #endif
+#if defined(CONFIG_ZEPHCORE_ROLE_REPEATER) || defined(CONFIG_ZEPHCORE_ROLE_ROOM_SERVER)
+	// ZEPHCORE: only these roles originate periodic adverts.
+	} else if (strcmp(config, "advert.adaptive") == 0) {
+		snprintf(reply, CLI_REPLY_SIZE, "> %s", _prefs->adaptive_advert ? "on" : "off");
+#endif
 	} else if (memcmp(config, "flood.advert.interval", 21) == 0) {
 		snprintf(reply, CLI_REPLY_SIZE, "> %u", (uint32_t)_prefs->flood_advert_interval);
 	} else if (memcmp(config, "advert.interval", 15) == 0) {
@@ -1426,6 +1431,20 @@ void CommonCLI::handleSetCmd(uint32_t sender_timestamp, const char* command, cha
 			strcpy(reply, "OK");
 		} else {
 			strcpy(reply, "Error: must be on, off or default");
+		}
+#endif
+#if defined(CONFIG_ZEPHCORE_ROLE_REPEATER) || defined(CONFIG_ZEPHCORE_ROLE_ROOM_SERVER)
+	// ZEPHCORE: opt-in periodic advertisement policy.
+	} else if (memcmp(config, "advert.adaptive ", 16) == 0) {
+		int on = cliOnOff(&config[16], cliDefaults()->adaptive_advert);
+		if (on < 0) {
+			strcpy(reply, "Error: must be on, off or default");
+		} else {
+			_prefs->adaptive_advert = (uint8_t)on;
+			_callbacks->updateAdvertTimer();
+			_callbacks->updateFloodAdvertTimer();
+			savePrefs();
+			strcpy(reply, "OK");
 		}
 #endif
 	} else if (memcmp(config, "flood.advert.interval ", 22) == 0) {
