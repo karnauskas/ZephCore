@@ -187,14 +187,60 @@ void CompanionMesh::sendFloodScoped(const mesh::GroupChannel &channel, mesh::Pac
 	sendFloodScopedDefault(pkt, delay_millis);
 }
 
+void CompanionMesh::privacyChanged()
+{
+	uint32_t random;
+	getRNG()->random((uint8_t *)&random, sizeof(random));
+	privacy.reset(random);
+}
+
+void CompanionMesh::observePrivatePosition(double lat, double lon, double altitude)
+{
+	privacy.observe(prefs.privacy, {lat, lon, altitude}, (uint32_t)_ms->getMillis());
+}
+
+bool CompanionMesh::privatePosition(PrivacyEngine::Position &pos)
+{
+	struct gps_position fix;
+	if (gps_get_last_known_position(&fix) && privacy.blocked(prefs.privacy,
+	    {fix.latitude_ndeg / 1e9, fix.longitude_ndeg / 1e9, fix.altitude_mm / 1000.0},
+	    getRTCClock()->getCurrentTime(), prefs.tz_offset)) {
+		privacy.invalidate();
+		return false;
+	}
+	return privacy.filter(prefs.privacy, pos, (uint32_t)_ms->getMillis(),
+		getRTCClock()->getCurrentTime(), prefs.tz_offset);
+}
+
+mesh::Packet *CompanionMesh::privateSelfAdvert()
+{
+	PrivacyEngine::Position pos{prefs.node_lat, prefs.node_lon, 0};
+	if (prefs.advert_loc_policy == ADVERT_LOC_NONE || !privatePosition(pos))
+		return createSelfAdvert(prefs.node_name);
+	auto *packet = createSelfAdvert(prefs.node_name, pos.lat, pos.lon);
+	if (packet) packet->privacy_generation = privacy.generation();
+	return packet;
+}
+
+void CompanionMesh::tagContactResponse(mesh::Packet *packet)
+{
+	if (_response_has_location) packet->privacy_generation = privacy.generation();
+}
+
+bool CompanionMesh::allowTransmit(mesh::Packet *packet)
+{
+	if (!packet->privacy_generation) return true;
+	if (packet->privacy_generation != privacy.generation()) return false;
+	PrivacyEngine::Position pos{prefs.node_lat, prefs.node_lon, 0};
+	struct gps_position fix;
+	if (gps_get_last_known_position(&fix))
+		pos = {fix.latitude_ndeg / 1e9, fix.longitude_ndeg / 1e9, fix.altitude_mm / 1000.0};
+	return !privacy.blocked(prefs.privacy, pos, getRTCClock()->getCurrentTime(), prefs.tz_offset);
+}
+
 bool CompanionMesh::sendSelfAdvert(bool flood)
 {
-	mesh::Packet *adv;
-	if (prefs.advert_loc_policy == 0) {  /* ADVERT_LOC_NONE */
-		adv = createSelfAdvert(prefs.node_name);
-	} else {
-		adv = createSelfAdvert(prefs.node_name, prefs.node_lat, prefs.node_lon);
-	}
+	mesh::Packet *adv = privateSelfAdvert();
 	if (!adv) {
 		return false;
 	}
@@ -1012,7 +1058,7 @@ static bool isUpstreamCompanionCommand(const char *cmd)
 	return false;
 }
 
-bool CompanionMesh::handleCommand(const char *command, uint32_t sender_timestamp, char *reply)
+bool CompanionMesh::handleCommand(const char *command, uint32_t sender_timestamp, char *reply, bool local)
 {
 	while (*command == ' ') command++;  // skip leading spaces
 
@@ -1025,14 +1071,18 @@ bool CompanionMesh::handleCommand(const char *command, uint32_t sender_timestamp
 	}
 	*reply = 0;
 
-	if (sender_timestamp != 0 && !isUpstreamCompanionCommand(command)) {
+	if (!local && !isUpstreamCompanionCommand(command)) {
 		return false;
+	}
+	if (!local && prefs.privacy.schedule && !strncmp(command, "set tz.offset ", 14)) {
+		strcpy(reply, "Error: privacy schedule locks remote timezone changes");
+		return true;
 	}
 	if (_cli_exec_cb == nullptr) {
 		strcpy(reply, "CLI not available");
 		return true;
 	}
-	_cli_exec_cb(command, sender_timestamp, hdr_used, reply);
+	_cli_exec_cb(command, sender_timestamp, hdr_used, reply, local);
 	return *reply != 0;
 }
 
@@ -1172,7 +1222,21 @@ int CompanionMesh::appendSelfTelemetry(uint8_t *reply, uint8_t permissions)
 	CayenneLPP telemetry(MAX_PACKET_PAYLOAD - 4);
 
 	telemetry.addVoltage(TELEM_CHANNEL_SELF, (float)(_batt_cb ? _batt_cb() : 0) / 1000.0f);
-	sensors.querySensors(permissions, telemetry);
+	_response_has_location = false;
+	if ((permissions & TELEM_PERM_LOCATION) && gps_is_enabled()) {
+		struct gps_position fix;
+		if (gps_get_last_known_position(&fix)) {
+			PrivacyEngine::Position pos{fix.latitude_ndeg / 1e9,
+				fix.longitude_ndeg / 1e9, fix.altitude_mm / 1000.0};
+			if (privatePosition(pos)) {
+				telemetry.addGPS(TELEM_CHANNEL_SELF, pos.lat, pos.lon, pos.altitude);
+				_response_has_location = true;
+			}
+		}
+	}
+
+	/* Location is added above so sensors cannot bypass the policy. */
+	sensors.querySensors(permissions & ~TELEM_PERM_LOCATION, telemetry);
 
 	float temperature = _board ? _board->getMCUTemperature() : NAN;
 	if (!isnan(temperature)) {
@@ -1192,6 +1256,7 @@ int CompanionMesh::appendSelfTelemetry(uint8_t *reply, uint8_t permissions)
 uint8_t CompanionMesh::onContactRequest(const ContactInfo &contact, uint32_t sender_timestamp,
 	const uint8_t *data, uint8_t len, uint8_t *reply)
 {
+	_response_has_location = false;
 	if (len < 1) return 0;
 
 	if (data[0] == REQ_TYPE_GET_TELEMETRY_DATA) {
@@ -1887,7 +1952,7 @@ bool CompanionMesh::handleCmdRunCliCommand(const uint8_t *data, size_t len)
 		uint8_t rsp[1 + COMPANION_CLI_PREFIX_ROOM + COMPANION_CLI_REPLY_SIZE];
 		char *reply = (char *)&rsp[1];
 		rsp[0] = PACKET_CLI_REPLY;
-		if (!handleCommand(line, 0, reply)) {
+		if (!handleCommand(line, 0, reply, true)) {
 			strcat(reply, "Unknown command");  // reply may have cmd prefix from 'line'
 		}
 
@@ -2322,12 +2387,7 @@ bool CompanionMesh::handleCmdExportContact(const uint8_t *data, size_t len)
 {
 	if (len < 1 + PUB_KEY_SIZE) {
 		// Export SELF - create self advert packet
-		mesh::Packet *pkt;
-		if (prefs.advert_loc_policy == 0) {  // ADVERT_LOC_NONE
-			pkt = createSelfAdvert(prefs.node_name);
-		} else {
-			pkt = createSelfAdvert(prefs.node_name, prefs.node_lat, prefs.node_lon);
-		}
+		mesh::Packet *pkt = privateSelfAdvert();
 		if (pkt) {
 			pkt->header |= ROUTE_TYPE_FLOOD;
 			uint8_t rsp[128];

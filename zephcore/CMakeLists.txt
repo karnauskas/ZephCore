@@ -632,6 +632,7 @@ else()
     helpers/compat/SHA256.cpp
     helpers/compat/ZephyrFS.cpp
     helpers/ui/ui_mesh_actions.cpp
+    helpers/PrivacyEngine.cpp
     app/CompanionMesh.cpp
     app/VContact.cpp
     app/PowerPolicy.cpp

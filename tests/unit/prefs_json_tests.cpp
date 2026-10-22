@@ -247,3 +247,44 @@ TEST(recovery_json, "UNIT-RECOVERY-005", "Recovery checkpoint round trips in JSO
 	CHECK(q.radio_checkpoint.attempts == 2 && r.radio_checkpoint.pending == 1);
 	CHECK(q.radio_checkpoint.candidate == RadioRecovery::candidate(q));
 }
+
+TEST(privacy_json, "UNIT-PRIVACY-009", "Privacy settings round trip only in companion JSON and legacy layouts remain unchanged") {
+	NodePrefs p = defaults();
+	CHECK(!PrivacyEngine::active(p.privacy));
+	auto c = companionBytes(p), s = serverBytes(p);
+	char reply[256];
+	for (const char *line : {"privacy zone add home 55.70 21.15 500", "privacy gps fuzz 1000",
+		"privacy gps precision 2000", "privacy gps movement 500", "privacy gps delay 1800",
+		"privacy gps schedule 22:00 07:00"}) {
+		CHECK(PrivacyEngine::command(p.privacy, line, reply, sizeof(reply)));
+		CHECK(!strcmp(reply, "OK"));
+	}
+	CHECK(companionBytes(p) == c && serverBytes(p) == s);
+	MemStream cs, ss;
+	CHECK(companionPrefsToJson(p, cs) && serverPrefsToJson(p, ss));
+	CHECK(cs.data.find("privacy") != std::string::npos && ss.data.find("privacy") == std::string::npos);
+	NodePrefs q = defaults();
+	CHECK(companionPrefsFromJson(q, cs));
+	CHECK(PrivacyEngine::valid(q.privacy));
+	CHECK(q.privacy.zones[0].lat_e6 == 55700000 && q.privacy.zones[0].lon_e6 == 21150000);
+	CHECK(q.privacy.zones[0].radius_m == 500 && !strcmp(q.privacy.zones[0].name, "home"));
+	CHECK(q.privacy.fuzz_m == 1000 && q.privacy.precision_m == 2000);
+	CHECK(q.privacy.movement_m == 500 && q.privacy.delay_s == 1800);
+	CHECK(q.privacy.schedule && q.privacy.start_min == 1320 && q.privacy.end_min == 420);
+	MemStream old("{}"); q = defaults();
+	CHECK(companionPrefsFromJson(q, old) && !PrivacyEngine::active(q.privacy));
+	MemStream corrupt("{zc:{privacy:{fuzz:100001}}}");
+	CHECK(companionPrefsFromJson(q, corrupt));
+	PrivacyEngine engine;
+	CHECK(engine.blocked(q.privacy, {55, 21, 0}, 1735689600, 2));
+	q = defaults();
+	q.privacy.recovery_hold = true;
+	MemStream held;
+	CHECK(companionPrefsToJson(q, held));
+	NodePrefs recovered = defaults();
+	CHECK(companionPrefsFromJson(recovered, held));
+	CHECK(recovered.privacy.recovery_hold);
+	CHECK(engine.blocked(recovered.privacy, {55, 21, 0}, 1735689600, 2));
+	CHECK(PrivacyEngine::command(recovered.privacy, "privacy off", reply, sizeof(reply)));
+	CHECK(!engine.blocked(recovered.privacy, {55, 21, 0}, 1735689600, 2));
+}

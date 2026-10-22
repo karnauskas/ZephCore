@@ -24,10 +24,13 @@ private:
     BaseSerialInterface* instance = nullptr;
   };
 
+  InterfaceType _last_rx_type = InterfaceType::NONE;  // ZEPHCORE: source of the current frame
   bool _enabled = false;
   RegisteredInterface _interfaces[MAX_INTERFACES] = {};
 
 public:
+  InterfaceType lastReceiveType() const { return _last_rx_type; }  // ZEPHCORE
+
   bool addInterface(InterfaceType type, BaseSerialInterface* iface) {
     // make sure an interface was provided
     if(iface == nullptr){
@@ -193,6 +196,7 @@ public:
       if(iface.instance && iface.instance->isEnabled()){
         size_t frameSize = iface.instance->checkRecvFrame(dest);
         if(frameSize > 0){
+          _last_rx_type = iface.type;  // ZEPHCORE: authorization must use the actual source
           return frameSize; 
         }
       }

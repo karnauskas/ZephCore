@@ -81,14 +81,14 @@ typedef void (*RadioReconfigureCallback)(bool preset_changed);
 typedef void (*PinChangeCallback)(uint32_t new_pin);
 
 /* Runs one CLI command for CompanionMesh::handleCommand (prefix already
- * stripped). main_companion owns the CommonCLI behind it. sender_timestamp 0
- * means local, where the buffer is COMPANION_CLI_PREFIX_ROOM +
- * COMPANION_CLI_REPLY_SIZE; a remote buffer is CLI_REMOTE_REPLY_SIZE.
+ * stripped). main_companion owns the CommonCLI behind it. local identifies an
+ * app/USB invocation; timestamps do not authorize it. The local buffer is
+ * COMPANION_CLI_PREFIX_ROOM + COMPANION_CLI_REPLY_SIZE; remote is CLI_REMOTE_REPLY_SIZE.
  * reply_hdr_used is what the reflected prefix took of it. */
 #define COMPANION_CLI_REPLY_SIZE 256
 #define COMPANION_CLI_PREFIX_ROOM 3
 typedef void (*CompanionCLICallback)(const char *command, uint32_t sender_timestamp,
-	uint8_t reply_hdr_used, char *reply);
+	uint8_t reply_hdr_used, char *reply, bool local);
 
 class CompanionMesh : public BaseChatMesh, public DataStoreHost {
 public:
@@ -122,7 +122,7 @@ public:
 	 * CMD_RUN_CLI_COMMAND, the USB text console and the v-contact chat (all
 	 * local, sender_timestamp 0), and TXT_TYPE_CLI_COMMAND from a contact with
 	 * flag 0x10. False for an unknown command. */
-	bool handleCommand(const char *command, uint32_t sender_timestamp, char *reply);
+	bool handleCommand(const char *command, uint32_t sender_timestamp, char *reply, bool local = false);
 
 	/* ---- V-contact ("v<node_name>"), see app/VContact.cpp ----
 	 * A chat contact that exists only toward the connected app; messages to it
@@ -210,8 +210,16 @@ public:
 	mesh::OffgridResult setOffgridMode(bool on);
 
 	NodePrefs prefs;
+	PrivacyEngine privacy;
+	void privacyChanged();
+	void observePrivatePosition(double lat, double lon, double altitude);
 
 protected:
+	bool _response_has_location = false;
+	mesh::Packet *privateSelfAdvert();
+	bool privatePosition(PrivacyEngine::Position &pos);
+	bool allowTransmit(mesh::Packet *packet) override;
+	void tagContactResponse(mesh::Packet *packet) override;
 	/* BaseChatMesh */
 	void onAdvertRecv(mesh::Packet *packet, const mesh::Identity &id, uint32_t timestamp,
 			  const uint8_t *app_data, size_t app_data_len) override;

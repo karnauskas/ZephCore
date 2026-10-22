@@ -53,6 +53,7 @@ public:
   uint8_t path[MAX_PATH_SIZE];
   uint8_t payload[MAX_PACKET_PAYLOAD];
   int8_t _snr;
+  uint32_t privacy_generation = 0;  // ZEPHCORE: local-only location policy generation
 
   /**
    * \brief calculate the hash of payload + type

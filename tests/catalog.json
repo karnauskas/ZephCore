@@ -671,6 +671,51 @@
       "id": "UNIT-RECOVERY-005",
       "name": "Recovery checkpoint round trips in JSON while legacy bytes stay frozen",
       "source": "tests/unit/prefs_json_tests.cpp"
+    },
+    {
+      "id": "UNIT-PRIVACY-001",
+      "name": "Zones suppress true coordinates before fuzzing and include the dateline and poles",
+      "source": "tests/unit/privacy_tests.cpp"
+    },
+    {
+      "id": "UNIT-PRIVACY-002",
+      "name": "Blackouts use configured timezone with inclusive start exclusive end and unknown-clock suppression",
+      "source": "tests/unit/privacy_tests.cpp"
+    },
+    {
+      "id": "UNIT-PRIVACY-003",
+      "name": "Bounded delay retains old snapshots under frequent fixes and clears on zone entry or reboot",
+      "source": "tests/unit/privacy_tests.cpp"
+    },
+    {
+      "id": "UNIT-PRIVACY-004",
+      "name": "Fuzz is boot-stable and geodesic precision removes altitude and movement releases only after threshold",
+      "source": "tests/unit/privacy_tests.cpp"
+    },
+    {
+      "id": "UNIT-PRIVACY-005",
+      "name": "CLI bounds zone names capacity schedules and numeric values without echoing private coordinates",
+      "source": "tests/unit/privacy_tests.cpp"
+    },
+    {
+      "id": "UNIT-PRIVACY-006",
+      "name": "Local privacy tags do not change wire bytes or packet hashes",
+      "source": "tests/unit/privacy_tests.cpp"
+    },
+    {
+      "id": "UNIT-PRIVACY-007",
+      "name": "Transmit policy discards queued location without transmitting or blocking chat and clears reused tags",
+      "source": "tests/unit/privacy_tests.cpp"
+    },
+    {
+      "id": "UNIT-PRIVACY-008",
+      "name": "Frame origin follows the actual transport when BLE USB and TCP are simultaneously enabled",
+      "source": "tests/unit/privacy_tests.cpp"
+    },
+    {
+      "id": "UNIT-PRIVACY-009",
+      "name": "Privacy settings round trip only in companion JSON and legacy layouts remain unchanged",
+      "source": "tests/unit/prefs_json_tests.cpp"
     }
   ]
 }

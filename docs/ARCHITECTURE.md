@@ -622,6 +622,17 @@ mesh::Mesh
 
 ### 6.2 CompanionMesh
 
+**Location privacy**: `helpers/PrivacyEngine` filters the companion's own advert
+send/export and GPS telemetry before encoding, including path-return responses.
+Four circular zones suppress location across all those paths; fuzz, precision,
+configured-timezone blackouts, movement thresholds and an eight-snapshot minimum
+delay history are optional and default off. `zc.privacy` is JSON-only. USB and
+authenticated BLE can configure it; TCP and LoRa cannot. Local-only packet generation
+tags let the dispatcher reject queued location after a policy change or zone entry,
+and recheck blackouts before TX. Chat and opaque app payloads remain available;
+identity keys, local device-info coordinates and forwarded traffic are unchanged.
+See [ADR 0015](adr/0015-companion-location-privacy.md) for bounds and privacy limits.
+
 Handles the binary BLE protocol with ~50 command opcodes. Key features:
 - **Offline queue**: circular buffer with peek/confirm pattern (survives BLE drops); `CONFIG_ZEPHCORE_OFFLINE_QUEUE_SIZE`, default 256 frames (lowered on RAM-bound boards)
 - **ACK tracking**: 8-slot table, computes expected ACK = SHA256(secret + hash)[0:4]

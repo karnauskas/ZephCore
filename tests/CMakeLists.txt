@@ -9,6 +9,7 @@ add_executable(zephcore_unit
   unit/packet_tests.cpp
   unit/policy_tests.cpp
   unit/power_budget_tests.cpp
+  unit/privacy_tests.cpp
   unit/pool_tests.cpp
   unit/contention_tests.cpp
   unit/adaptive_advert_tests.cpp
@@ -37,6 +38,7 @@ add_executable(zephcore_unit
   ${PRODUCTION}/helpers/AdvertDataHelpers.cpp
   ${PRODUCTION}/helpers/MeshTimeSync.cpp
   ${PRODUCTION}/helpers/PowerBudget.cpp
+  ${PRODUCTION}/helpers/PrivacyEngine.cpp
   ${PRODUCTION}/helpers/battery_curve.c
   ${PRODUCTION}/adapters/radio/CadController.cpp
   ${PRODUCTION}/helpers/PrefsCodec.cpp

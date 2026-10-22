@@ -795,10 +795,41 @@ static bool handle_vcontact_cli(const char *line, char *reply)
 static_assert(COMPANION_CLI_REPLY_SIZE == CLI_REPLY_SIZE,
 	      "companion CLI reply buffer must match CommonCLI reply size");
 
+static bool usb_privacy_cli = false;
+
 static void companion_cli_exec(const char *line, uint32_t sender_timestamp,
-			       uint8_t reply_hdr_used, char *reply)
+			       uint8_t reply_hdr_used, char *reply, bool local)
 {
 	reply[0] = '\0';
+	if (!strncmp(line, "privacy", 7) && (!line[7] || line[7] == ' ')) {
+		bool usb = usb_privacy_cli || interface_manager.lastReceiveType() == InterfaceType::USB;
+		bool secured_ble = false;
+#if IS_ENABLED(CONFIG_BT)
+		secured_ble = interface_manager.lastReceiveType() == InterfaceType::Bluetooth &&
+			zephcore_ble_is_connected();
+#endif
+		if (!PrivacyEngine::canConfigure(local, usb, secured_ble)) {
+			strcpy(reply, "Error: privacy requires USB or authenticated BLE");
+			return;
+		}
+		PrivacyPrefs candidate = companion_mesh.prefs.privacy;
+		PrivacyEngine::command(candidate, line, reply, CLI_REPLY_SIZE - reply_hdr_used);
+		if (!strcmp(reply, "OK")) {
+			if (!PrivacyEngine::valid(candidate)) {
+				strcpy(reply, "Error: invalid privacy configuration");
+			} else if (memcmp(&candidate, &companion_mesh.prefs.privacy, sizeof(candidate))) {
+				PrivacyPrefs previous = companion_mesh.prefs.privacy;
+				companion_mesh.prefs.privacy = candidate;
+				if (data_store.savePrefs(companion_mesh.prefs)) {
+					companion_mesh.privacyChanged();
+				} else {
+					companion_mesh.prefs.privacy = previous;
+					strcpy(reply, "Error: privacy settings not saved");
+				}
+			}
+		}
+		return;
+	}
 	if (handle_vcontact_cli(line, reply)) {
 		return;
 	}
@@ -820,7 +851,9 @@ static void companion_cli_exec(const char *line, uint32_t sender_timestamp,
 static void companion_cli_run(const char *line)
 {
 	char reply[COMPANION_CLI_PREFIX_ROOM + CLI_REPLY_SIZE];
-	companion_mesh.handleCommand(line, 0, reply);
+	usb_privacy_cli = true;
+	companion_mesh.handleCommand(line, 0, reply, true);
+	usb_privacy_cli = false;
 	if (reply[0] != '\0') {
 		zephcore_usb_companion_write_text("\r\n  -> ", 7);
 		zephcore_usb_companion_write_text(reply, strlen(reply));
@@ -897,6 +930,7 @@ static void gps_fix_callback(double lat, double lon, int64_t utc_time)
 		struct gps_position gpos;
 
 		gps_get_position(&gpos);
+		companion_mesh.observePrivatePosition(lat, lon, gpos.altitude_mm / 1000.0);
 		int32_t lat_mdeg = (int32_t)(lat * 1000.0);
 		int32_t lon_mdeg = (int32_t)(lon * 1000.0);
 
@@ -1020,6 +1054,7 @@ int main(void)
 	companion_mesh.prefs.gps_interval = CONFIG_ZEPHCORE_GPS_POLL_INTERVAL_SEC; /* 0 = always on */
 
 	data_store.loadPrefs(companion_mesh.prefs);
+	companion_mesh.privacyChanged();
 	power_budget_bind(zephyr_board, companion_mesh.prefs);
 	/* A repeat flag stored on a non-off-grid frequency is dropped. */
 	if (mesh::offgridNormalize(companion_mesh.prefs)) {

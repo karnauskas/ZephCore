@@ -274,6 +274,7 @@ void Dispatcher::checkRecv() {
       logRxRaw(_radio->getLastSNR(), _radio->getLastRSSI(), raw, len);
 
       pkt = _mgr->allocNew();
+      if (pkt) pkt->privacy_generation = 0;  // ZEPHCORE: received bytes carry no local policy tag
       if (pkt == NULL) {
         MESH_DEBUG_PRINTLN("%s Dispatcher::checkRecv(): WARNING: received data, no unused packets available!", getLogDateTime());
         break;
@@ -460,6 +461,13 @@ void Dispatcher::checkSend() {
         return;
       }
 
+      // ZEPHCORE: a policy change can invalidate already constructed packets.
+      if (!allowTransmit(outbound)) {
+        _mgr->free(outbound);
+        outbound = NULL;
+        notifyTxQueued(0);
+        return;
+      }
       bool success = _radio->startSendRaw(raw, len);
       if (!success) {
         onLbtRefused(now, len);  // ZEPHCORE: re-queue (upstream drops the packet)
@@ -479,6 +487,7 @@ Packet* Dispatcher::obtainNewPacket() {
   } else {
     pkt->payload_len = pkt->path_len = 0;
     pkt->_snr = 0;
+    pkt->privacy_generation = 0;  // ZEPHCORE: pool slots retain their previous contents
   }
   return pkt;
 }

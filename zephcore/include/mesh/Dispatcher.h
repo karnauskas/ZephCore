@@ -218,6 +218,8 @@ protected:
   virtual void logRxRaw(float snr, float rssi, const uint8_t raw[], int len) { }   // custom hook
 
   virtual void logRx(Packet* packet, int len, float score) { }   // hooks for custom logging
+  // ZEPHCORE: revalidate queued private data immediately before transmission.
+  virtual bool allowTransmit(Packet* packet) { return true; }
   virtual void logTx(Packet* packet, int len) { }
   virtual void logTxFail(Packet* packet, int len) { }
   virtual const char* getLogDateTime() { return ""; }

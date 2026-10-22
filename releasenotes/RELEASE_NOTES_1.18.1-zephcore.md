@@ -1,5 +1,15 @@
 # ZephCore 1.18.1-zephcore
 
+## Companion location privacy
+
+USB Serial and authenticated BLE CLI can configure four local privacy zones,
+location fuzzing/precision, timezone-based blackout hours, movement thresholds and
+delayed location. Zones suppress firmware-generated location across advertisements,
+self-advert exports and telemetry; queued location is checked again before TX.
+Defaults preserve existing behavior. Chat remains available. Identity keys and
+app-authored/raw coordinates are outside this policy. See
+[CLI commands](../docs/CLI_commands.md#companion-location-privacy-zephcore-only).
+
 ## Adaptive mesh advertisement intervals
 
 Repeaters and room servers can enable `set advert.adaptive on` to advertise

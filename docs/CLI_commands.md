@@ -558,3 +558,49 @@ UI sensor reads may reuse readings up to 60 or 300 seconds old, respectively.
 Telemetry replies and manual adverts remain available. Existing timers finish;
 new scheduling decisions use the current factor. Zero intervals remain zero.
 External power, when detectable, and absent batteries select normal operation.
+
+## Companion location privacy (ZephCore only)
+
+Use the USB Serial text CLI or an authenticated BLE app's run-CLI command
+(`CMD_RUN_CLI_COMMAND`), or its v-contact if enabled. TCP and remote LoRa CLI
+cannot configure privacy. These commands apply to companions on every board.
+Successful changes are saved atomically to `prefs.json`; save errors retain the
+previous policy. Existing configurations have privacy off.
+
+| Command | Effect |
+|---|---|
+| `privacy status` | Show policy settings and zone count; no zone coordinates |
+| `privacy zone add home 55.70 21.15 500` | Add/update a circular zone in degrees and meters; illustrative coordinates |
+| `privacy zone home action suppress` | Confirm suppression; this is the only supported action and is the default |
+| `privacy zone home apply all` | Confirm coverage of all firmware-generated location; this is the default |
+| `privacy zone list` | List zone names |
+| `privacy zone delete home` | Remove a zone |
+| `privacy gps fuzz 1000` | Displace outgoing coordinates by 1000 m with a boot-stable random bearing |
+| `privacy gps precision 1000` | Quantize outgoing coordinates to an approximate 1000 m grid |
+| `privacy gps schedule 22:00 07:00` | Withhold location from 22:00 inclusive to 07:00 exclusive in `tz.offset` time; crosses midnight |
+| `privacy gps schedule off` | Disable the blackout |
+| `privacy gps movement 500` | Release location only after moving at least 500 m from the last released raw sample |
+| `privacy gps delay 1800` | Withhold location until a RAM snapshot is at least 1800 s old |
+| `privacy off` | Clear all privacy settings and zones |
+
+There are four zones, names up to 11 ASCII letters/digits/underscores/hyphens.
+Radii are 1–100000 m; fuzz/precision/movement are integer 0–100000 m (0 disables);
+delay is 0–86400 s. Equal schedule endpoints are rejected. The timezone is the
+existing fixed whole-hour offset, not an automatic daylight-saving timezone;
+remote timezone changes are rejected while the schedule is enabled. Until the
+clock has a plausible calendar, an enabled schedule withholds location.
+If an existing `prefs.json` cannot be loaded, legacy recovery also withholds
+location and `privacy status` reports a settings-recovery hold. Use `privacy off`
+to clear it, then configure the desired policy again.
+
+Zones check true known positions before transformation. Suppressed advertisements
+still transmit identity/name without coordinates; telemetry retains other allowed
+sensors. Fuzz/precision also remove altitude. Delay uses eight spaced snapshots,
+does not schedule new transmissions, and restarts after reboot, policy changes or
+zone entry. Movement is shared across packet construction/export paths, so a
+stationary location reply may be omitted after an advertisement or export.
+
+The engine does not rotate identity keys, inspect chat/raw payloads, recall
+app-cached exports or hide the true position from the local UI/device-info API.
+An old GPS fix cannot detect a new zone entry. See
+[ADR 0015](adr/0015-companion-location-privacy.md) for the full limits.

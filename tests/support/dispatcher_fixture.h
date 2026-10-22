@@ -64,6 +64,8 @@ struct Dispatcher : mesh::Dispatcher {
     std::vector<uint32_t> wakes;
     std::vector<int8_t> offsets;
     unsigned successes = 0, failures = 0;
+    bool block_private = false;
+    bool allowTransmit(mesh::Packet *p) override { return !block_private || !p->privacy_generation; }
     Dispatcher(Radio& radio, Clock& clock, mesh::PacketManager& pool) : mesh::Dispatcher(radio, clock, pool) {
         setTxQueuedCallback([](uint32_t delay, void *self) {
             static_cast<Dispatcher*>(self)->wakes.push_back(delay);

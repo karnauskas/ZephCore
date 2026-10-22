@@ -333,10 +333,12 @@ void BaseChatMesh::onPeerDataRecv(mesh::Packet* packet, uint8_t type, int sender
         // let this sender know path TO here, so they can use sendDirect(), and ALSO encode the response
         mesh::Packet* path = createPathReturn(from.id, secret, packet->path, packet->path_len,
                                               PAYLOAD_TYPE_RESPONSE, temp_buf, reply_len);
-        if (path) sendFloodScoped(from, path, SERVER_RESPONSE_DELAY);
+        // ZEPHCORE: metadata also follows responses piggybacked on path returns.
+        if (path) { tagContactResponse(path); sendFloodScoped(from, path, SERVER_RESPONSE_DELAY); }
       } else {
         mesh::Packet* reply = createDatagram(PAYLOAD_TYPE_RESPONSE, from.id, secret, temp_buf, reply_len);
         if (reply) {
+          tagContactResponse(reply);  // ZEPHCORE: queued-response privacy
           if (from.out_path_len != OUT_PATH_UNKNOWN) {  // we have an out_path, so send DIRECT
             sendDirect(reply, from.out_path, from.out_path_len, SERVER_RESPONSE_DELAY);
           } else {
