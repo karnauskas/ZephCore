@@ -8,7 +8,7 @@
  *   UART0 console (TX=GPIO1, RX=GPIO3)
  *   LED0 on GPIO25, WiFi
  *
- * LoRa SPI3 pins: NSS=18, DIO0=26, DIO1=35, DIO2=34
+ * LoRa SPI3 pins: NSS=18, DIO0=26, DIO1=33, DIO2=32
  * LoRa control:   RESET=23
  * Display I2C0:   SDA=21, SCL=22 (SSD1306 @ 0x3C)
  *
@@ -16,7 +16,45 @@
  *   storage_partition @ 0x3B0000 (192KB) — repurposed as LittleFS
  */
 
+#include <zephyr/dt-bindings/adc/adc.h>
+#include <zephyr/dt-bindings/input/input-event-codes.h>
+
 / {
+	aliases {
+		sw0 = &user_button;
+		lora-tx-led = &green_led;
+	};
+
+	buttons: buttons {
+		compatible = "gpio-keys";
+		user_button: button_0 {
+			gpios = <&gpio0 0 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
+			label = "User Button";
+			zephyr,code = <INPUT_KEY_0>;
+		};
+	};
+
+	user_btn_longpress {
+		compatible = "zephyr,input-longpress";
+		input = <&buttons>;
+		input-codes = <INPUT_KEY_0>;
+		short-codes = <INPUT_KEY_A>;
+		long-codes = <INPUT_KEY_ENTER>;
+		long-delay-ms = <1000>;
+	};
+
+	page_btn_multitap {
+		compatible = "zephcore,input-multi-tap";
+		input-codes = <INPUT_KEY_A>;
+		tap-codes = <INPUT_KEY_1 INPUT_KEY_LEFT>;
+		tap-delay-ms = <400>;
+	};
+
+	zephyr,user {
+		io-channels = <&adc0 7>;
+		vbat-mv-multiplier = <8800>;
+	};
+
 	chosen {
 		/* UART0 console is correct for classic ESP32 (no native USB) */
 		zephyr,console = &uart0;
@@ -78,4 +116,26 @@
 /* I2C sensors — auto-detected at runtime */
 &i2c0 {
 	#include "../../common/sensors-i2c.dtsi"
+};
+
+/* V2.1-1.6 radio interrupts; GPIO35 is the battery ADC input. */
+&lora0 {
+	dio-gpios = <&gpio0 26 (GPIO_PULL_DOWN | GPIO_ACTIVE_HIGH)>,
+		    <&gpio1 1 (GPIO_PULL_DOWN | GPIO_ACTIVE_HIGH)>,
+		    <&gpio1 0 (GPIO_PULL_DOWN | GPIO_ACTIVE_HIGH)>;
+};
+
+/* GPIO35 = ADC1 channel 7, with a 2:1 battery divider. */
+&adc0 {
+	status = "okay";
+	#address-cells = <1>;
+	#size-cells = <0>;
+
+	channel@7 {
+		reg = <7>;
+		zephyr,gain = "ADC_GAIN_1_4";
+		zephyr,reference = "ADC_REF_INTERNAL";
+		zephyr,acquisition-time = <ADC_ACQ_TIME_DEFAULT>;
+		zephyr,resolution = <12>;
+	};
 };

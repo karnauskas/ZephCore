@@ -113,11 +113,14 @@ xiao_esp32s3/esp32s3/procpu
 > SX1262 in `board.overlay`. Console/CLI are on `uart0` (onboard USB-UART).
 >
 > **TTGO LoRa32** (`ttgo_lora32/esp32/procpu`): classic ESP32 (PICO-D4) with
-> **SX1276**. Console/CLI on `uart0`.
+> **SX1276**. This is the short name for Arduino MeshCore’s
+> `LilyGo_TLora_V2_1_1_6`: SSD1306 OLED, GPIO0 button, GPIO25 activity LED,
+> and GPIO35 battery ADC. Console/CLI on `uart0`. Wiring and build commands:
+> [board README](../zephcore/boards/esp32/ttgo_lora32/README.md).
 >
 > **Source-only — no published firmware, and not a supported configuration.**
-> It is deliberately absent from `build.sh`, the release workflow and the Mesh
-> America catalog, so no release ever carries a binary for it. It is kept in the
+> It is absent from `build.sh` and the Mesh America catalog; CI only compiles
+> it, so no release carries a binary for it. It is kept in the
 > tree as the one exercise of the SX127x loramac-node radio path, which is old,
 > lacks RX duty cycle and RX gain boost, and gets none of the work the native
 > SX126x/LR11xx/LR20xx drivers do. Build it yourself if you want it; expect to

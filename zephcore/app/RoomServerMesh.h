@@ -7,6 +7,7 @@
 #include <mesh/StaticPoolPacketManager.h>
 #include <mesh/SimpleMeshTables.h>
 #include <helpers/MeshTimeSync.h>
+#include <helpers/AdaptiveAdvert.h>
 #include <helpers/NodePrefs.h>
 #include "RepeaterDataStore.h"
 
@@ -79,6 +80,10 @@ class RoomServerMesh : public mesh::Mesh, public CommonCLICallbacks {
   // before key_store, the post buffer after the region maps), so the object
   // layout, and the proof that this file's code is unchanged, stay intact.
   NodePrefs _prefs;
+  // ZEPHCORE: shared periodic advertisement policy.
+  AdaptiveAdvert _adaptive_advert;
+  uint32_t advertDelay(uint32_t base) const;
+  void advertHeard(const mesh::Identity& id);
   ClientACL acl;
   CommonCLI _cli;
   uint8_t reply_data[MAX_PACKET_PAYLOAD];

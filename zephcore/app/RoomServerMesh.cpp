@@ -831,16 +831,32 @@ void RoomServerMesh::sendSelfAdvertisement(int delay_millis, bool flood) {
   }
 }
 
+// ZEPHCORE: shared policy; a new identity can advance enabled timers only.
+uint32_t RoomServerMesh::advertDelay(uint32_t base) const {
+  return _prefs.adaptive_advert
+      ? _adaptive_advert.interval(base, (uint32_t)k_uptime_get(), getContentionEstimate()) : base;
+}
+
+void RoomServerMesh::advertHeard(const mesh::Identity& id) {
+  if (!_prefs.adaptive_advert) return;
+  uint32_t now = (uint32_t)k_uptime_get();
+  if (!_adaptive_advert.heard(id.pub_key, now)) return;
+  next_local_advert = AdaptiveAdvert::sooner(next_local_advert, now,
+      advertDelay((uint32_t)_prefs.advert_interval * 2 * 60 * 1000));
+  next_flood_advert = AdaptiveAdvert::sooner(next_flood_advert, now,
+      advertDelay((uint32_t)_prefs.flood_advert_interval * 60 * 60 * 1000));
+}
+
 void RoomServerMesh::updateAdvertTimer() {
   if (_prefs.advert_interval > 0) { // schedule local advert timer
-    next_local_advert = futureMillis((uint32_t)_prefs.advert_interval * 2 * 60 * 1000);
+    next_local_advert = futureMillis(advertDelay((uint32_t)_prefs.advert_interval * 2 * 60 * 1000)); // ZEPHCORE: adaptive when enabled.
   } else {
     next_local_advert = 0; // stop the timer
   }
 }
 void RoomServerMesh::updateFloodAdvertTimer() {
   if (_prefs.flood_advert_interval > 0) { // schedule flood advert timer
-    next_flood_advert = futureMillis(((uint32_t)_prefs.flood_advert_interval) * 60 * 60 * 1000);
+    next_flood_advert = futureMillis(advertDelay((uint32_t)_prefs.flood_advert_interval * 60 * 60 * 1000)); // ZEPHCORE: adaptive when enabled.
   } else {
     next_flood_advert = 0; // stop the timer
   }
@@ -1184,6 +1200,7 @@ void RoomServerMesh::onAdvertRecv(mesh::Packet* packet, const mesh::Identity& id
       packet->transport_codes[0] == 0 && packet->transport_codes[1] == 0) {
     return;
   }
+  advertHeard(id);
   _timesync.onAdvertHeard(id.pub_key, timestamp, packet->getPathHashCount(),
         (uint32_t)(k_uptime_get() / 1000));
 }

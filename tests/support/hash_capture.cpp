@@ -8,11 +8,14 @@ size_t hash_output_size = 0;
 }
 
 // Tests inspect Packet's hash preimage, NOT SHA-256 correctness. Deterministic
-// marker output must never be mistaken for a digest or used in firmware builds.
+// FNV marker output distinguishes test inputs; it is not SHA-256 and must never
+// be mistaken for a digest or used in firmware builds.
 void mesh::Utils::sha256(uint8_t *hash, size_t size, const uint8_t *msg, int len)
 {
     if (len < 0 || size != MAX_HASH_SIZE) throw std::runtime_error("unexpected hash call");
     test_support::hash_input.assign(msg, msg + len);
     test_support::hash_output_size = size;
-    memset(hash, 0xA5, size);
+    uint64_t marker = 14695981039346656037ull;
+    for (int i = 0; i < len; ++i) marker = (marker ^ msg[i]) * 1099511628211ull;
+    for (size_t i = 0; i < size; ++i) hash[i] = uint8_t(marker >> (8 * i));
 }

@@ -216,3 +216,23 @@ TEST(pjson_tz_fraction, "UNIT-PJSON-009", "A quarter-hour timezone survives pref
     CHECK(companionPrefsFromJson(q, u));
     CHECK(q.tz_offset == 5.5f);
 }
+
+TEST(adaptive_json, "UNIT-ADAPTIVE-003", "Adaptive adverts persist only in server JSON") {
+    NodePrefs p = defaults();
+    CHECK(p.adaptive_advert == 0);
+    std::string legacy = serverBytes(p);
+    p.adaptive_advert = 1;
+    CHECK(serverBytes(p) == legacy);
+    MemStream stream;
+    CHECK(serverPrefsToJson(p, stream));
+    NodePrefs loaded = defaults();
+    CHECK(serverPrefsFromJson(loaded, stream));
+    CHECK(loaded.adaptive_advert == 1);
+    loaded = defaults();
+    MemStream old("{}");
+    CHECK(serverPrefsFromJson(loaded, old));
+    CHECK(loaded.adaptive_advert == 0);
+    MemStream invalid("{zc:{adaptive_adv:255}}");
+    CHECK(serverPrefsFromJson(loaded, invalid));
+    CHECK(loaded.adaptive_advert == 0);
+}

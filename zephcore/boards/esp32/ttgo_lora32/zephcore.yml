@@ -1,3 +1,4 @@
 # ZephCore board manifest — schema in zephcore/scripts/board_manifest.py
+# LilyGo_TLora_V2_1_1_6 uses Zephyr short name ttgo_lora32.
 # Not in the release matrix (bring-up / unvalidated).
 target: ttgo_lora32/esp32/procpu
