@@ -144,11 +144,41 @@ public:
 	explicit WifiJson(NodePrefs *p) : _p(p) {}
 };
 
+class PrivacyZoneJson : public ConfigSerializer {
+	PrivacyZone *_z;
+protected:
+	void structure() override {
+		def("name", _z->name, sizeof(_z->name));
+		def("lat_e6", _z->lat_e6); def("lon_e6", _z->lon_e6);
+		def("radius", _z->radius_m);
+	}
+public:
+	explicit PrivacyZoneJson(PrivacyZone *z) : _z(z) {}
+};
+
+class PrivacyJson : public ConfigSerializer {
+	PrivacyPrefs *_p;
+	PrivacyZoneJson _z0, _z1, _z2, _z3;
+protected:
+	void structure() override {
+		def("zone0", _z0); def("zone1", _z1); def("zone2", _z2); def("zone3", _z3);
+		def("fuzz", _p->fuzz_m); def("precision", _p->precision_m);
+		def("movement", _p->movement_m); def("delay", _p->delay_s);
+		def("schedule", _p->schedule); def("start", _p->start_min); def("end", _p->end_min);
+		def("hold", _p->recovery_hold);
+	}
+public:
+	explicit PrivacyJson(PrivacyPrefs *p) : _p(p), _z0(&p->zones[0]),
+		_z1(&p->zones[1]), _z2(&p->zones[2]), _z3(&p->zones[3]) {}
+};
+
 class ZcCompanionJson : public ZcCommonJson {
+	PrivacyJson _privacy;
 protected:
 	void structure() override
 	{
 		ZcCommonJson::structure();
+		def("privacy", _privacy);
 		def("ble_off", _p->ble_disabled);
 		def("bright", _p->display_brightness);
 		def("wake", _p->wake_on_msg);
@@ -164,7 +194,7 @@ protected:
 	}
 
 public:
-	explicit ZcCompanionJson(NodePrefs *p) : ZcCommonJson(p) {}
+	explicit ZcCompanionJson(NodePrefs *p) : ZcCommonJson(p), _privacy(&p->privacy) {}
 };
 
 class CompanionJson : public ConfigSerializer {

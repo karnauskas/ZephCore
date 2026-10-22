@@ -356,6 +356,8 @@ void ZephyrDataStore::loadPrefs(NodePrefs &prefs)
 		 * revert) can trust flash without a "first run" special case. */
 		LOG_DBG("loadPrefs: no prefs file found, persisting defaults");
 	}
+	/* Legacy prefs cannot recover a lost JSON-only privacy policy. */
+	if (had_json) prefs.privacy.recovery_hold = true;
 	savePrefs(prefs);
 }
 
