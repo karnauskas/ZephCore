@@ -58,6 +58,7 @@ protected:
 
 	void structure() override
 	{
+		def("power_budget", _p->adaptive_power);
 		def("leds_off", _p->leds_disabled);
 		def("leds_radio", _p->leds_radio_mode);
 		def("leds_hb", _p->leds_hb_mode);

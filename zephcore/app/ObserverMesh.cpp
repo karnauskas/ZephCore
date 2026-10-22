@@ -1,3 +1,4 @@
+#include <helpers/PowerBudget.h>
 /*
  * SPDX-License-Identifier: MIT
  * ObserverMesh — listen-only LoRa mesh node implementation.
@@ -300,7 +301,10 @@ bool ObserverMesh::handleCLI(const char *command, char *reply, int reply_size)
 	if (memcmp(command, "get ", 4) == 0) {
 		const char *key = command + 4;
 
-		if (strcmp(key, "role") == 0) {
+		if (strcmp(key, "power.budget") == 0) {
+			snprintf(reply, reply_size, "%s factor=%u", _prefs.adaptive_power ? "on" : "off", power_budget_factor());
+
+		} else if (strcmp(key, "role") == 0) {
 			snprintf(reply, reply_size, "observer");
 
 		} else if (strcmp(key, "name") == 0) {
@@ -396,7 +400,16 @@ bool ObserverMesh::handleCLI(const char *command, char *reply, int reply_size)
 
 		const char *val;
 
-		if ((val = find_val(rest, "name")) != nullptr) {
+		if ((val = find_val(rest, "power.budget")) != nullptr) {
+			if (strcmp(val, "on") == 0 || strcmp(val, "off") == 0 || strcmp(val, "default") == 0) {
+				_prefs.adaptive_power = strcmp(val, "on") == 0;
+				_store->savePrefs(_prefs);
+				snprintf(reply, reply_size, "OK");
+			} else {
+				snprintf(reply, reply_size, "Error: must be on, off or default");
+			}
+
+		} else if ((val = find_val(rest, "name")) != nullptr) {
 			strncpy(_prefs.node_name, val, sizeof(_prefs.node_name) - 1);
 			_prefs.node_name[sizeof(_prefs.node_name) - 1] = '\0';
 			_store->savePrefs(_prefs);
