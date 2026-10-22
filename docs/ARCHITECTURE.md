@@ -573,12 +573,17 @@ sleep.
 
 | Parameter | Default | Notes |
 |-----------|---------|-------|
-| Frequency | 869.618 MHz | EU 869.4-869.65 MHz band (500mW ERP allowed) |
-| Bandwidth | 62 kHz | |
+| Frequency | 869.618 MHz | EU/UK (Narrow), used by Atviras Tinklas in Lithuania |
+| Bandwidth | 62.5 kHz | |
 | Spreading Factor | 8 | |
 | Coding Rate | 4/8 | |
 | Preamble | 16 symbols | |
 | TX Power | 22 dBm | Clamped by `CONFIG_ZEPHCORE_MAX_TX_POWER_DBM` |
+| Duty cycle | 10% | `airtime_factor = 9` |
+| Path hash size | 2 bytes | `path_hash_mode = 1` |
+
+`helpers/LoRaConfig.h` seeds new preferences with the EU/UK (Narrow) preset;
+saved settings are retained. See [ADR 0011](adr/0011-lithuania-radio-defaults.md).
 
 ---
 

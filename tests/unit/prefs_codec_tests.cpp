@@ -297,3 +297,13 @@ TEST(prefs_gps_interval, "UNIT-PREFS-010", "GPS interval: one clamp, and a corru
     sanitizeNodePrefs(&p);
     CHECK(p.gps_interval == GPS_INTERVAL_MAX_SEC);
 }
+
+TEST(prefs_atvirastinklas, "UNIT-PREFS-011", "Factory defaults match Atviras Tinklas EU UK Narrow") {
+	NodePrefs p = defaults();
+	CHECK(p.freq == 869.618f);
+	CHECK(p.bw == 62.5f);
+	CHECK(p.sf == 8);
+	CHECK(p.cr == 8);
+	CHECK(p.airtime_factor == 9.0f);
+	CHECK(p.path_hash_mode == 1);
+}

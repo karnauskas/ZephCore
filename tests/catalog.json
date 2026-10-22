@@ -601,6 +601,11 @@
       "id": "UNIT-DEDUP-004",
       "name": "New table accepts pre-reboot packets and resetting stats preserves suppression",
       "source": "tests/unit/dedup_tests.cpp"
+    },
+    {
+      "id": "UNIT-PREFS-011",
+      "name": "Factory defaults match Atviras Tinklas EU UK Narrow",
+      "source": "tests/unit/prefs_codec_tests.cpp"
     }
   ]
 }

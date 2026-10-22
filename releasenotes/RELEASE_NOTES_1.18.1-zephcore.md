@@ -20,3 +20,10 @@ The source-only `ttgo_lora32/esp32/procpu` target now maps this revision's
 LoRa interrupt pins correctly and adds its battery ADC, user button and
 activity LED. The existing SSD1306 display is retained. No published firmware
 or hardware verification is claimed; see the board README for local builds.
+
+## Lithuania radio defaults
+
+Fresh configurations now use Atviras Tinklas's EU/UK (Narrow) preset:
+869.618 MHz, 62.5 kHz bandwidth, SF8 and coding rate 4/8. The defaults remain
+10% duty cycle and two-byte path hashes. Existing saved radio settings are
+retained; select EU/UK (Narrow) in the companion app to update those devices.
