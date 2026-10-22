@@ -33,6 +33,30 @@ This shows a live view even while the feature is off — how many trustworthy
 senders it can see, how many agree, what correction it *would* make. It is
 worth watching that dry-run output for a day before (and after) enabling.
 
+## Confidence and drift
+
+`get meshtimesync` includes two diagnostics even when synchronization is off:
+
+- `conf=none`: no eligible samples.
+- `conf=low`: bootstrap, too few tenured sources, or no strict majority.
+- `conf=medium`: normal quorum and a strict majority agree.
+- `conf=high`: all eligible sources agree and every sample is at most 15 minutes old.
+
+Confidence describes mesh agreement, not proof that your clock is correct.
+A mesh whose nodes all share the same wrong time can still report high
+confidence. GPS/manual suppression and the existing step limits still apply.
+
+`drift=+100ppm/6` means the median rate of six agreeing sources is 100 parts
+per million faster than local uptime. A negative value means they run slower.
+This uses each sender's first and latest accepted timestamps within its current
+tenure; both must be at least 24 hours apart. At least the configured quorum
+(default six) must contribute. Otherwise it shows `drift=unknown/N`.
+
+The estimate is unaffected by local wall-clock changes. A sender that fails
+consistency checks must rebuild its tenure and drift history. Reboot clears
+all history. Drift is diagnostic: it does not tune the clock or extrapolate
+votes. Sender clock changes and radio delay can affect the measurement.
+
 ## What it will NOT do
 
 - It never fights a recent clock set, whether from GPS or from you: any GPS

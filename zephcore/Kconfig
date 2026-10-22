@@ -330,7 +330,7 @@ config ZEPHCORE_TIMESYNC_TABLE_SIZE
 	default 32
 	range 8 64
 	help
-	  Per-sender advert sample slots (24 bytes each) for the mesh
+	  Per-sender advert sample slots (28 bytes each) for the mesh
 	  time-sync consensus. 32 fits dense neighborhoods; companions
 	  default to 16 (RAM-bound role). Must be at least the quorum for
 	  normal-mode stepping to be reachable.
