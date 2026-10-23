@@ -32,6 +32,7 @@ namespace mesh {
 
 class ObserverMesh : public Dispatcher {
 	StaticPoolPacketManager _pkt_mgr;
+	MainBoard& _board;
 
 	/* Cached values set by logRxRaw / logRx before onRecvPacket */
 	float    _last_rssi;
@@ -72,7 +73,7 @@ protected:
 	DispatcherAction onRecvPacket(Packet *pkt) override;
 
 public:
-	ObserverMesh(Radio &radio, MillisecondClock &ms, RTCClock &rtc);
+	ObserverMesh(Radio &radio, MillisecondClock &ms, RTCClock &rtc, MainBoard &board);
 
 	/* Initialize: load/generate identity, load/init prefs, start radio RX. */
 	void begin(RepeaterDataStore *store, struct ObserverCreds *creds);

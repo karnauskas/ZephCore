@@ -1,3 +1,4 @@
+#include <helpers/PingBot.h>
 #include <helpers/PowerBudget.h>
 #include "RepeaterMesh.h"
 //#include <algorithm>  // ZEPHCORE: not in Zephyr's minimal C++, see simple_sort
@@ -24,6 +25,7 @@
 #include "observer_creds.h"
 #include <ZephyrWiFiStation.h>
 #include <ZephyrMQTTPublisher.h>
+#include <helpers/MqttAuth.h>
 #endif
 #include <helpers/PacketLog.h>
 
@@ -58,6 +60,7 @@ static void uplink_time_sync_cb(uint32_t unix_ts)
 {
   if (s_uplink_mesh) {
     s_uplink_mesh->getRTCClock()->setCurrentTime(unix_ts);
+    mqtt_publisher_set_time(unix_ts);
     atomic_set(&s_uplink_sntp_pending, 1);
     /* Wake the main loop rather than waiting for its next deadline. */
     s_uplink_mesh->notifyWake();
@@ -1105,6 +1108,7 @@ void RepeaterMesh::begin(RepeaterDataStore* store) {
 
   if (isUplinkEnabled() && _uplink_creds.wifi_ssid[0] && _uplink_creds.mqtt_host[0]) {
     s_uplink_mesh = this;
+    mqtt_auth_init(self_id);
     zc_wifi_station_start(_uplink_creds.wifi_ssid, _uplink_creds.wifi_psk, uplink_time_sync_cb,
               true /* WiFi power save */);
     mqtt_publisher_start(&_uplink_creds, _prefs.node_name,
@@ -1634,4 +1638,27 @@ void RepeaterMesh::timeSyncTick() {
   discover_limiter.reset();
   anon_limiter.reset();
   login_fail_limiter.reset();
+}
+
+// ZEPHCORE: shared pingbot parsing and formatting, on the mesh thread.
+int RepeaterMesh::searchChannelsByHash(const uint8_t *hash, mesh::GroupChannel channels[], int max_matches)
+{
+	int count = 0;
+	return pingbotSearch(_prefs.pingbot, hash, channels, count, max_matches);
+}
+
+void RepeaterMesh::onGroupDataRecv(mesh::Packet *packet, uint8_t type, const mesh::GroupChannel& channel,
+	uint8_t *data, size_t len)
+{
+	if (type == PAYLOAD_TYPE_GRP_TXT) {
+		uint8_t payload[PINGBOT_PAYLOAD_SIZE];
+		size_t size = pingbotReply(_prefs.pingbot, channel, *packet, data, len,
+			(int)_radio->getLastRSSI(), _prefs.node_name, getRTCClock()->getCurrentTime(), payload);
+		if (size) {
+			uint32_t timestamp = getRTCClock()->getCurrentTimeUnique();
+			memcpy(payload, &timestamp, sizeof(timestamp));
+			auto *reply = createGroupDatagram(PAYLOAD_TYPE_GRP_TXT, channel, payload, size);
+			if (reply) sendFloodReply(reply, 0, packet->getPathHashSize());
+		}
+	}
 }

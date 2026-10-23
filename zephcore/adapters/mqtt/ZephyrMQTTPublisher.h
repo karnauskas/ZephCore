@@ -3,7 +3,7 @@
  * ZephyrMQTTPublisher — MQTT client thread for the Observer role.
  *
  * Dedicated thread: waits for WiFi ready, resolves broker hostname,
- * connects with optional TLS (TLS_PEER_VERIFY_NONE), publishes LWT and
+ * connects over WebSockets with optional TLS (TLS_PEER_VERIFY_NONE), publishes LWT and
  * status, then drains a pre-serialized JSON publish queue.
  */
 
@@ -11,6 +11,7 @@
 
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -51,14 +52,21 @@ void mqtt_publisher_start(const struct ObserverCreds *creds,
 char *mqtt_publisher_stage(size_t *size);
 void mqtt_publisher_commit(enum mqtt_pub_topic topic, int payload_len);
 
-/* Returns true when the MQTT session is active. */
+/* True when the broker session is active. */
 bool mqtt_publisher_is_connected(void);
+
+/* Boot totals for packet-topic messages; sent means local QoS 0 transport success,
+ * not broker or collector acknowledgement. Status messages are excluded. */
+void mqtt_publisher_format_status(char *out, size_t size);
 
 /*
  * Trigger an MQTT reconnect (e.g. after credential change via CLI).
  * Safe to call from any thread.
  */
 void mqtt_publisher_reconnect(void);
+
+/* SNTP time anchor used by the worker to mint fresh per-host authentication tokens. */
+void mqtt_publisher_set_time(uint32_t epoch);
 
 /*
  * Register a callback invoked once each time MQTT connects (CONNACK received).

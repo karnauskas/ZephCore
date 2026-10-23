@@ -73,6 +73,7 @@ protected:
 	void structure() override
 	{
 		def("radio_good", _recovery);
+		def("pingbot", _p->pingbot);
 		def("power_budget", _p->adaptive_power);
 		def("leds_off", _p->leds_disabled);
 		def("leds_radio", _p->leds_radio_mode);

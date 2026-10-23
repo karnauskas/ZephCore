@@ -389,6 +389,7 @@ target_sources(app PRIVATE
   helpers/AdvertDataHelpers.cpp
   helpers/MeshTimeSync.cpp
   helpers/PowerBudget.cpp
+  helpers/PingBot.cpp
   # Captures the reset cause before anything consumes it; every role needs it
   # at boot, so it is never conditional.
   helpers/boot_info.c
@@ -588,6 +589,7 @@ if(CONFIG_ZEPHCORE_ROLE_REPEATER OR CONFIG_ZEPHCORE_ROLE_ROOM_SERVER)
         app/observer_creds.cpp
         adapters/wifi/ZephyrWiFiStation.c
         adapters/mqtt/ZephyrMQTTPublisher.c
+        helpers/MqttAuth.cpp
       )
       target_include_directories(app PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/adapters/wifi
@@ -610,6 +612,7 @@ elseif(CONFIG_ZEPHCORE_ROLE_OBSERVER)
     app/RepeaterDataStore.cpp
     adapters/wifi/ZephyrWiFiStation.c
     adapters/mqtt/ZephyrMQTTPublisher.c
+    helpers/MqttAuth.cpp
   )
   target_include_directories(app PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/adapters/wifi
@@ -735,6 +738,9 @@ if(CONFIG_ZEPHCORE_UI_DISPLAY)
     helpers/ui/display.c
     helpers/ui/cfb_font_0608.c
   )
+  if(CONFIG_ZEPHCORE_ROLE_OBSERVER)
+    target_sources(app PRIVATE helpers/ui/observer_display.cpp helpers/ui/observer_text.cpp)
+  endif()
 endif()
 
 if(CONFIG_ZEPHCORE_DISPLAY_MONO_TFT)

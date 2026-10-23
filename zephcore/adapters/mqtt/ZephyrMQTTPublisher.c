@@ -1,119 +1,87 @@
-/*
- * SPDX-License-Identifier: MIT
- * ZephyrMQTTPublisher — MQTT client thread for the Observer role.
- *
- * Thread flow:
- *   1. Wait for WIFI_READY_BIT (WiFi + DHCP + SNTP done)
- *   2. Resolve broker hostname via zsock_getaddrinfo()
- *   3. Connect MQTT (TLS with TLS_PEER_VERIFY_NONE, or plaintext)
- *   4. Publish retained "online" status (LWT handles "offline" on disconnect)
- *   5. Poll loop: drain publish queue + mqtt_input() keepalive
- *   6. On error/disconnect: publish "offline", back off 5s, goto 1
- *
- * The session (CONNACK until the poll loop ends) is reported to the WiFi
- * station, which blocks SoC light sleep outside it.
- */
-
+/* SPDX-License-Identifier: MIT */
 #include "ZephyrMQTTPublisher.h"
-#include "ZephyrWiFiStation.h"   /* g_wifi_events, WIFI_READY_BIT, zc_wifi_station_* */
+#include "ZephyrWiFiStation.h"
 #include "uplink_creds.h"
-
+#include <helpers/MqttAuth.h>
 #include <zephyr/kernel.h>
 #include <zephyr/net/mqtt.h>
 #include <zephyr/net/socket.h>
 #include <zephyr/net/tls_credentials.h>
 #include <zephyr/logging/log.h>
-
+#include <zephyr/sys/atomic.h>
 #include <errno.h>
 #include <string.h>
 #include <stdio.h>
 
 LOG_MODULE_REGISTER(mqtt_pub, CONFIG_LOG_DEFAULT_LEVEL);
-
-/* ========== Publish queue ========== */
-
-/* Pre-serialized message: JSON payload + 1-byte index into the two fixed
- * topic strings registered at start (see enum mqtt_pub_topic). */
-#define PUB_TOPIC_MAX   160
+#define PUB_TOPIC_MAX 160
 #define PUB_PAYLOAD_MAX 1024
-#define PUB_QUEUE_LEN   8
+#define PUB_QUEUE_LEN 8
+#define PUB_RECONNECT_BIT BIT(0)
 
 struct pub_msg {
 	uint16_t payload_len;
-	uint8_t  topic;   /* enum mqtt_pub_topic */
+	uint8_t topic;
 	char payload[PUB_PAYLOAD_MAX];
 };
-
 K_MSGQ_DEFINE(s_pub_queue, sizeof(struct pub_msg), PUB_QUEUE_LEN, 4);
-
-/* Producer staging slot: callers build JSON directly into this buffer via
- * mqtt_publisher_stage() then mqtt_publisher_commit() copies it into the
- * queue. Single producer (mesh main thread) — no lock. */
-static struct pub_msg s_stage;
-
-/* Consumer drain slot: only the MQTT thread touches it (keeps a ~1 KB
- * struct off the thread stack). */
-static struct pub_msg s_drain;
-
-/* ========== Module state ========== */
-
+static __noinit struct pub_msg s_stage, s_drain;
 static const struct ObserverCreds *s_creds;
-static char s_client_id[64];
-static char s_status_topic[PUB_TOPIC_MAX];
-static char s_packets_topic[PUB_TOPIC_MAX];
-
-static volatile bool s_connected;
+static char s_client_id[64], s_status_topic[PUB_TOPIC_MAX], s_packets_topic[PUB_TOPIC_MAX];
 static void (*s_connect_cb)(void);
-
-/* Event bit to trigger reconnect from external callers */
-#define PUB_RECONNECT_BIT BIT(0)
+static atomic_t s_connected;
+static atomic_t s_packets_queued, s_packets_sent, s_packets_dropped, s_packets_failed, s_publish_error;
+static atomic_t s_time_offset, s_time_valid;
 static K_EVENT_DEFINE(s_pub_events);
+static K_SEM_DEFINE(s_started, 0, 1);
+static __noinit char s_lwt_offline[128];
 
-/* ========== MQTT buffers ========== */
+struct broker {
+	struct mqtt_client client;
+	struct sockaddr_in broker_addr;
+	uint8_t rx_buf[256], ws_buf[512];
+	struct mqtt_topic lwt_topic;
+	struct mqtt_utf8 lwt_msg, mqtt_user, mqtt_pass, mqtt_client_id;
+	int64_t retry_at, connack_deadline;
+	uint32_t backoff_s;
+	bool open, connected;
+};
+static __noinit struct broker s_broker;
+/* MQTT calls run serially on one worker; TX data is consumed before return. */
+static __noinit uint8_t s_tx_buf[1024];
+static __noinit char s_auth_username[68], s_auth_token[640];
 
-#define MQTT_RX_BUF_SIZE 256
-#define MQTT_TX_BUF_SIZE 512
-
-static uint8_t s_rx_buf[MQTT_RX_BUF_SIZE];
-static uint8_t s_tx_buf[MQTT_TX_BUF_SIZE];
-
-/* ========== MQTT event callback ========== */
-
-static void mqtt_evt_handler(struct mqtt_client *client,
-			     const struct mqtt_evt *evt)
+struct broker_config {
+	const char *host;
+	uint16_t port;
+	bool tls;
+};
+static struct broker_config config(void)
 {
-	switch (evt->type) {
-	case MQTT_EVT_CONNACK:
-		if (evt->result == 0) {
-			LOG_INF("MQTT connected");
-			s_connected = true;
-			if (s_connect_cb) {
-				s_connect_cb();
-			}
-		} else {
-			/* Broker return codes: 1=bad proto, 2=id rejected, 3=server unavail,
-			 * 4=bad user/pass, 5=not authorized */
-			LOG_WRN("MQTT CONNACK rejected: return_code=%d",
-				evt->param.connack.return_code);
-		}
-		break;
-	case MQTT_EVT_DISCONNECT:
-		LOG_INF("MQTT disconnected");
-		s_connected = false;
-		break;
-	case MQTT_EVT_PUBLISH:
-		/* Observer never subscribes — ignore incoming publishes */
-		break;
-	case MQTT_EVT_PUBACK:
-	case MQTT_EVT_PINGRESP:
-		break;
-	default:
-		LOG_DBG("MQTT evt %d", evt->type);
-		break;
-	}
+	return (struct broker_config){ s_creds->mqtt_host, s_creds->mqtt_port, s_creds->mqtt_tls };
 }
 
-/* ========== Publish helpers ========== */
+static void set_connected(bool connected)
+{
+	s_broker.connected = connected;
+	atomic_set(&s_connected, connected);
+	zc_wifi_station_session_up(connected);
+}
+
+static void mqtt_evt_handler(struct mqtt_client *client, const struct mqtt_evt *evt)
+{
+	ARG_UNUSED(client);
+	if (evt->type == MQTT_EVT_CONNACK) {
+		if (evt->result == 0) {
+			set_connected(true);
+			s_broker.backoff_s = 5;
+			LOG_INF("MQTT connected");
+			if (s_connect_cb) s_connect_cb();
+		} else LOG_WRN("MQTT CONNACK rejected: %d", evt->result);
+	} else if (evt->type == MQTT_EVT_DISCONNECT) {
+		set_connected(false);
+	}
+}
 
 static uint16_t s_pkt_id;
 
@@ -144,13 +112,11 @@ static int do_publish(struct mqtt_client *client,
 
 static void publish_status(struct mqtt_client *client, bool online)
 {
-	static const char online_json[]  = "{\"status\":\"online\"}";
-	static const char offline_json[] = "{\"status\":\"offline\"}";
-	const char *msg = online ? online_json : offline_json;
-	do_publish(client, s_status_topic, msg, strlen(msg), true);
+	char json[128];
+	int len = snprintf(json, sizeof(json), "{\"status\":\"%s\",\"origin_id\":\"%s\"}",
+			online ? "online" : "offline", s_auth_username + 3);
+	do_publish(client, s_status_topic, json, len, true);
 }
-
-/* ========== DNS resolution ========== */
 
 static int resolve_host(const char *host, uint16_t port,
 			struct sockaddr_in *out_addr)
@@ -176,67 +142,58 @@ static int resolve_host(const char *host, uint16_t port,
 	return 0;
 }
 
-/* ========== Client setup ========== */
-
-static struct mqtt_client s_client;
-static struct sockaddr_in s_broker_addr;
-
-/* LWT strings (must outlive mqtt_connect()) */
-static const char s_lwt_offline[] = "{\"status\":\"offline\"}";
-static struct mqtt_topic    s_lwt_topic;
-static struct mqtt_utf8     s_lwt_msg;
-static struct mqtt_utf8     s_mqtt_user;
-static struct mqtt_utf8     s_mqtt_pass;
-static struct mqtt_utf8     s_mqtt_client_id;
-
-static int setup_client(void)
+static bool setup_client(struct broker *b)
 {
-	mqtt_client_init(&s_client);
+	const struct broker_config c = config();
+	mqtt_client_init(&b->client);
 
 	/* Client ID */
-	s_mqtt_client_id.utf8 = (const uint8_t *)s_client_id;
-	s_mqtt_client_id.size = strlen(s_client_id);
-	s_client.client_id    = s_mqtt_client_id;
+	b->mqtt_client_id.utf8 = (const uint8_t *)s_client_id;
+	b->mqtt_client_id.size = strlen(s_client_id);
+	b->client.client_id    = b->mqtt_client_id;
 
 	/* Broker address (already resolved) */
-	s_client.broker = &s_broker_addr;
+	b->client.broker = &b->broker_addr;
 
 	/* RX/TX buffers */
-	s_client.rx_buf      = s_rx_buf;
-	s_client.rx_buf_size = sizeof(s_rx_buf);
-	s_client.tx_buf      = s_tx_buf;
-	s_client.tx_buf_size = sizeof(s_tx_buf);
+	b->client.rx_buf      = b->rx_buf;
+	b->client.rx_buf_size = sizeof(b->rx_buf);
+	b->client.tx_buf      = s_tx_buf;
+	b->client.tx_buf_size = sizeof(s_tx_buf);
 
 	/* Keepalive (matches CONFIG_MQTT_KEEPALIVE=60) */
-	s_client.keepalive    = 60;
-	s_client.clean_session = 1;
+	b->client.keepalive    = 60;
+	b->client.clean_session = 1;
 
-	/* Credentials */
-	if (s_creds->mqtt_user[0] != '\0') {
-		s_mqtt_user.utf8  = (const uint8_t *)s_creds->mqtt_user;
-		s_mqtt_user.size  = strlen(s_creds->mqtt_user);
-		s_client.user_name = &s_mqtt_user;
+	/* Only the worker uses these credentials; MQTT CONNECT consumes them synchronously. */
+	uint32_t epoch = (uint32_t)atomic_get(&s_time_offset) + (uint32_t)(k_uptime_get() / 1000);
+	if (!atomic_get(&s_time_valid)) {
+		LOG_WRN("MQTT authentication needs SNTP time");
+		return false;
 	}
-	if (s_creds->mqtt_password[0] != '\0') {
-		s_mqtt_pass.utf8  = (const uint8_t *)s_creds->mqtt_password;
-		s_mqtt_pass.size  = strlen(s_creds->mqtt_password);
-		s_client.password = &s_mqtt_pass;
-	}
+	if (!mqtt_auth_credentials(c.host, epoch,
+			s_auth_username, sizeof(s_auth_username), s_auth_token, sizeof(s_auth_token))) return false;
+	b->mqtt_user = (struct mqtt_utf8){ .utf8 = (const uint8_t *)s_auth_username, .size = strlen(s_auth_username) };
+	b->mqtt_pass = (struct mqtt_utf8){ .utf8 = (const uint8_t *)s_auth_token, .size = strlen(s_auth_token) };
+	b->client.user_name = &b->mqtt_user;
+	b->client.password = &b->mqtt_pass;
 
 	/* LWT — retained "offline" published if connection drops */
-	s_lwt_topic.topic.utf8  = (const uint8_t *)s_status_topic;
-	s_lwt_topic.topic.size  = strlen(s_status_topic);
-	s_lwt_topic.qos         = MQTT_QOS_0_AT_MOST_ONCE;
-	s_lwt_msg.utf8          = (const uint8_t *)s_lwt_offline;
-	s_lwt_msg.size          = strlen(s_lwt_offline);
-	s_client.will_topic     = &s_lwt_topic;
-	s_client.will_message   = &s_lwt_msg;
-	s_client.will_retain    = 1;
+	snprintf(s_lwt_offline, sizeof(s_lwt_offline), "{\"status\":\"offline\",\"origin_id\":\"%s\"}",
+		 s_auth_username + 3);
+	b->lwt_topic.topic.utf8  = (const uint8_t *)s_status_topic;
+	b->lwt_topic.topic.size  = strlen(s_status_topic);
+	b->lwt_topic.qos         = MQTT_QOS_0_AT_MOST_ONCE;
+	b->lwt_msg.utf8          = (const uint8_t *)s_lwt_offline;
+	b->lwt_msg.size          = strlen(s_lwt_offline);
+	b->client.will_topic     = &b->lwt_topic;
+	b->client.will_message   = &b->lwt_msg;
+	b->client.will_retain    = 1;
 
 	/* Transport */
-	if (s_creds->mqtt_tls) {
-		s_client.transport.type = MQTT_TRANSPORT_SECURE;
-		struct mqtt_sec_config *tls = &s_client.transport.tls.config;
+	if (c.tls) {
+		b->client.transport.type = MQTT_TRANSPORT_SECURE_WEBSOCKET;
+		struct mqtt_sec_config *tls = &b->client.transport.tls.config;
 		/* No certificate pinning — encrypted but no CA verification.
 		 * This avoids cert rotation issues (e.g. Let's Encrypt renewals). */
 		tls->peer_verify  = TLS_PEER_VERIFY_NONE;
@@ -244,238 +201,132 @@ static int setup_client(void)
 		tls->cipher_list  = NULL;
 		tls->sec_tag_count = 0;
 		tls->sec_tag_list  = NULL;
-		tls->hostname      = s_creds->mqtt_host;  /* SNI */
+		tls->hostname      = c.host;  /* SNI */
 	} else {
-		s_client.transport.type = MQTT_TRANSPORT_NON_SECURE;
+		b->client.transport.type = MQTT_TRANSPORT_NON_SECURE_WEBSOCKET;
 	}
 
-	s_client.evt_cb = mqtt_evt_handler;
+	b->client.transport.websocket.config.host = c.host;
+	b->client.transport.websocket.config.url = "/";
+	b->client.transport.websocket.config.tmp_buf = b->ws_buf;
+	b->client.transport.websocket.config.tmp_buf_len = sizeof(b->ws_buf);
+	b->client.transport.websocket.timeout = 5000;
+	b->client.evt_cb = mqtt_evt_handler;
+	return true;
 
-	return 0;
 }
 
-/* ========== MQTT poll loop ========== */
 
-static int get_sock(void)
+static int get_sock(const struct broker *b)
 {
-	if (s_creds->mqtt_tls) {
-		return s_client.transport.tls.sock;
-	}
-	return s_client.transport.tcp.sock;
+	return b->client.transport.websocket.sock;
 }
 
-/* Wait for socket to be readable, with a timeout_ms cap.
- * Returns > 0 if data available, 0 if timeout, < 0 on error/hangup. */
-static int poll_socket(int sock, int timeout_ms)
+static void stop_broker(void)
 {
-	struct zsock_pollfd pfd = {
-		.fd     = sock,
-		.events = ZSOCK_POLLIN,
-	};
-	int rc = zsock_poll(&pfd, 1, timeout_ms);
-	if (rc < 0) {
-		return -errno;
-	}
-	if (pfd.revents & (ZSOCK_POLLHUP | ZSOCK_POLLERR)) {
-		return -ECONNRESET;
-	}
-	return rc; /* 0 = timeout, 1 = data ready */
+	struct broker *b = &s_broker;
+	set_connected(false);
+	if (b->open) mqtt_abort(&b->client);
+	b->open = false;
+	b->retry_at = k_uptime_get() + b->backoff_s * 1000;
+	b->backoff_s = MIN(b->backoff_s * 2, 300);
 }
-
-static void run_poll_loop(void)
-{
-	int sock = get_sock();
-
-	for (;;) {
-		/* Check for external reconnect request */
-		if (k_event_test(&s_pub_events, PUB_RECONNECT_BIT)) {
-			k_event_clear(&s_pub_events, PUB_RECONNECT_BIT);
-			LOG_INF("Reconnect requested");
-			break;
-		}
-
-		/* Drain publish queue */
-		while (k_msgq_get(&s_pub_queue, &s_drain, K_NO_WAIT) == 0) {
-			const char *topic = (s_drain.topic == MQTT_PUB_TOPIC_PACKETS)
-					    ? s_packets_topic : s_status_topic;
-			int rc = do_publish(&s_client, topic,
-					    s_drain.payload, s_drain.payload_len, false);
-			if (rc < 0) {
-				LOG_WRN("Publish failed: %d", rc);
-				s_connected = false;
-				return;
-			}
-		}
-
-		/* Wait up to 100ms for incoming data (keepalive PINGRESP, etc.) */
-		int pr = poll_socket(sock, 100);
-		if (pr < 0) {
-			LOG_WRN("Socket error in poll loop: %d", pr);
-			s_connected = false;
-			return;
-		}
-		if (pr > 0) {
-			int rc = mqtt_input(&s_client);
-			if (rc < 0 && rc != -EAGAIN && rc != -EWOULDBLOCK) {
-				LOG_WRN("mqtt_input error: %d", rc);
-				s_connected = false;
-				return;
-			}
-		}
-
-		/* Keepalive ping, a quarter of the keepalive early. mqtt_live()
-		 * pings only once the keepalive has fully elapsed, and a broker
-		 * that enforces it without grace closes the session first
-		 * (devdocs/lld/13-power-management.md, section 12). */
-		int left_ms = mqtt_keepalive_time_left(&s_client);
-
-		if (left_ms >= 0 && left_ms <= (int)s_client.keepalive * 250) {
-			int rc = mqtt_ping(&s_client);
-
-			if (rc < 0 && rc != -EAGAIN) {
-				LOG_WRN("mqtt_ping error: %d", rc);
-				s_connected = false;
-				return;
-			}
-		}
-
-		if (!s_connected) {
-			return;
-		}
-	}
-}
-
-/* ========== Publisher thread ========== */
-
-#define MQTT_THREAD_STACK_SIZE 12288
-#define MQTT_THREAD_PRIORITY   5
-
-/* Escalating retry backoff: DNS/connect/CONNACK failures double the delay up
- * to the cap (a broker rejecting credentials won't fix itself in 10 s, and
- * every TLS retry costs a full handshake). Reset on successful CONNACK. */
-#define RETRY_BACKOFF_MIN_S 5
-#define RETRY_BACKOFF_MAX_S 300
-
-static uint32_t s_retry_backoff_s = RETRY_BACKOFF_MIN_S;
-
-static void backoff_sleep(void)
-{
-	LOG_INF("MQTT retry in %u s", s_retry_backoff_s);
-	k_sleep(K_SECONDS(s_retry_backoff_s));
-	s_retry_backoff_s = MIN(s_retry_backoff_s * 2, RETRY_BACKOFF_MAX_S);
-}
-
-static void mqtt_thread_fn(void *p1, void *p2, void *p3);
-K_THREAD_DEFINE(mqtt_pub_thread, MQTT_THREAD_STACK_SIZE,
-		mqtt_thread_fn, NULL, NULL, NULL,
-		MQTT_THREAD_PRIORITY, 0, 0);
 
 static void mqtt_thread_fn(void *p1, void *p2, void *p3)
 {
 	ARG_UNUSED(p1); ARG_UNUSED(p2); ARG_UNUSED(p3);
-
-	LOG_INF("MQTT publisher thread started");
-
+	k_sem_take(&s_started, K_FOREVER);
+	struct broker *b = &s_broker;
+	b->backoff_s = 5;
 	for (;;) {
-		s_connected = false;
-
-		/* Wait until WiFi is ready (blocks indefinitely) */
-		LOG_INF("Waiting for WiFi ready...");
-		k_event_wait(&g_wifi_events, WIFI_READY_BIT, false, K_FOREVER);
-
-		if (!s_creds || s_creds->mqtt_host[0] == '\0') {
-			LOG_WRN("No MQTT host configured — set with: set mqtt.host <hostname>");
-			k_sleep(K_SECONDS(10));
-			continue;
+		if (!zc_wifi_station_is_connected()) {
+			if (b->open) stop_broker();
+			k_event_wait(&g_wifi_events, WIFI_READY_BIT, false, K_FOREVER);
 		}
-
-		/* Clear reconnect flag before connecting */
-		k_event_clear(&s_pub_events, PUB_RECONNECT_BIT);
-
-		/* Resolve broker hostname */
-		int rc = resolve_host(s_creds->mqtt_host, s_creds->mqtt_port,
-				      &s_broker_addr);
-		if (rc < 0) {
-			LOG_WRN("DNS failed");
-			backoff_sleep();
-			continue;
+		if (k_event_test(&s_pub_events, PUB_RECONNECT_BIT)) {
+			k_event_clear(&s_pub_events, PUB_RECONNECT_BIT);
+			if (b->connected) publish_status(&b->client, false);
+			stop_broker();
+			b->retry_at = 0;
+			b->backoff_s = 5;
 		}
-
-		/* Configure MQTT client */
-		setup_client();
-
-		/* Connect */
-		LOG_INF("Connecting to MQTT broker %s:%u (TLS=%u)",
-			s_creds->mqtt_host, s_creds->mqtt_port,
-			(unsigned)s_creds->mqtt_tls);
-
-		rc = mqtt_connect(&s_client);
-		if (rc < 0) {
-			LOG_WRN("mqtt_connect failed: %d", rc);
-			backoff_sleep();
-			continue;
+		if (!b->open) {
+			const struct broker_config c = config();
+			if (!*c.host) {
+				k_event_wait(&s_pub_events, PUB_RECONNECT_BIT, false, K_FOREVER);
+				continue;
+			}
+			int64_t delay = b->retry_at - k_uptime_get();
+			if (delay > 0) {
+				k_event_wait(&s_pub_events, PUB_RECONNECT_BIT, false, K_MSEC(delay));
+				continue;
+			}
+			LOG_INF("MQTT connecting to %s:%u (WS /, TLS=%u)", c.host, c.port, c.tls);
+			int rc = resolve_host(c.host, c.port, &b->broker_addr);
+			if (rc == 0) rc = setup_client(b) ? mqtt_connect(&b->client) : -EAGAIN;
+			if (rc < 0) {
+				LOG_WRN("MQTT WSS/CONNECT failed: %d", rc);
+				stop_broker();
+				continue;
+			}
+			LOG_INF("MQTT WebSocket connected; CONNECT sent, waiting for CONNACK");
+			b->open = true;
+			b->connack_deadline = k_uptime_get() + 5000;
 		}
-
-		/* Wait for CONNACK — poll up to 5s total, 500ms per iteration */
-		{
-			int sock = get_sock();
-			for (int i = 0; i < 10 && !s_connected; i++) {
-				int pr = poll_socket(sock, 500);
-				if (pr < 0) {
-					LOG_WRN("CONNACK wait: socket error %d", pr);
-					break;
-				}
-				if (pr > 0) {
-					int rc2 = mqtt_input(&s_client);
-					if (rc2 < 0 && rc2 != -EAGAIN &&
-					    rc2 != -EWOULDBLOCK) {
-						LOG_WRN("CONNACK wait: mqtt_input error %d", rc2);
-						break;
-					}
-				}
+		while (b->connected && k_msgq_get(&s_pub_queue, &s_drain, K_NO_WAIT) == 0) {
+			const char *topic = s_drain.topic == MQTT_PUB_TOPIC_PACKETS ? s_packets_topic : s_status_topic;
+			int published = do_publish(&b->client, topic, s_drain.payload, s_drain.payload_len, s_drain.topic == MQTT_PUB_TOPIC_STATUS);
+			if (s_drain.topic == MQTT_PUB_TOPIC_PACKETS) {
+				atomic_inc(published < 0 ? &s_packets_failed : &s_packets_sent);
+				if (published < 0) atomic_set(&s_publish_error, published);
+			}
+			if (published < 0) {
+				LOG_WRN("MQTT publish failed: %d", published);
+				stop_broker();
 			}
 		}
-
-		if (!s_connected) {
-			LOG_WRN("CONNACK not accepted (broker rejected or no response)");
-			mqtt_disconnect(&s_client, NULL);
-			backoff_sleep();
+		if (!b->open) continue;
+		struct zsock_pollfd fd = { .fd = get_sock(b), .events = ZSOCK_POLLIN };
+		int rc = zsock_poll(&fd, 1, 100);
+		if (rc < 0 || (fd.revents & (ZSOCK_POLLERR | ZSOCK_POLLHUP | ZSOCK_POLLNVAL))) {
+			LOG_WRN("MQTT socket poll failed: rc=%d errno=%d events=0x%x", rc, errno, fd.revents);
+			stop_broker();
 			continue;
 		}
-
-		/* Connected — reset the failure backoff */
-		s_retry_backoff_s = RETRY_BACKOFF_MIN_S;
-
-		/* Session up: the station may let the SoC light-sleep until the
-		 * poll loop ends. */
-		zc_wifi_station_session_up(true);
-
-		/* Publish retained "online" status */
-		publish_status(&s_client, true);
-
-		/* Run poll loop until disconnect or reconnect request */
-		run_poll_loop();
-
-		zc_wifi_station_session_up(false);
-
-		/* Publish "offline" before closing (best-effort) */
-		if (s_connected) {
-			publish_status(&s_client, false);
+		bool was_connected = b->connected;
+		if (fd.revents & ZSOCK_POLLIN) {
+			int input = mqtt_input(&b->client);
+			if ((input < 0 && input != -EAGAIN && input != -EWOULDBLOCK) ||
+			    (was_connected && !b->connected)) {
+				LOG_WRN("MQTT input failed: %d", input);
+				stop_broker();
+				continue;
+			}
 		}
-		mqtt_disconnect(&s_client, NULL);
-
-		LOG_INF("MQTT session ended");
-		backoff_sleep();
+		if (!b->connected) {
+			if (k_uptime_get() >= b->connack_deadline) {
+				LOG_WRN("MQTT CONNACK timed out");
+				stop_broker();
+			}
+			continue;
+		}
+		int left = mqtt_keepalive_time_left(&b->client);
+		if (left >= 0 && left <= b->client.keepalive * 250) {
+			int ping = mqtt_ping(&b->client);
+			if (ping < 0 && ping != -EAGAIN) stop_broker();
+		}
 	}
 }
-
-/* ========== Public API ========== */
+K_THREAD_DEFINE(mqtt_pub_thread, 12288, mqtt_thread_fn, NULL, NULL, NULL, 5, 0, 0);
 
 void mqtt_publisher_start(const struct ObserverCreds *creds,
 			  const char *client_id,
 			  const char *status_topic,
 			  const char *packets_topic)
 {
+	memset(&s_stage, 0, sizeof(s_stage));
+	memset(&s_drain, 0, sizeof(s_drain));
+	memset(&s_broker, 0, sizeof(s_broker));
 	s_creds = creds;
 	strncpy(s_client_id,     client_id,     sizeof(s_client_id) - 1);
 	strncpy(s_status_topic,  status_topic,  sizeof(s_status_topic) - 1);
@@ -484,7 +335,7 @@ void mqtt_publisher_start(const struct ObserverCreds *creds,
 	s_status_topic[sizeof(s_status_topic) - 1]   = '\0';
 	s_packets_topic[sizeof(s_packets_topic) - 1] = '\0';
 
-	/* Thread is already created by K_THREAD_DEFINE — nothing more to do. */
+	k_sem_give(&s_started);
 	LOG_INF("MQTT publisher ready (client_id=%s)", s_client_id);
 }
 
@@ -509,13 +360,25 @@ void mqtt_publisher_commit(enum mqtt_pub_topic topic, int payload_len)
 	s_stage.topic = (uint8_t)topic;
 
 	if (k_msgq_put(&s_pub_queue, &s_stage, K_NO_WAIT) != 0) {
+		if (topic == MQTT_PUB_TOPIC_PACKETS) atomic_inc(&s_packets_dropped);
 		LOG_WRN("Publish queue full — message dropped");
+	} else if (topic == MQTT_PUB_TOPIC_PACKETS) {
+		atomic_inc(&s_packets_queued);
 	}
 }
 
 bool mqtt_publisher_is_connected(void)
 {
-	return s_connected;
+	return atomic_get(&s_connected) != 0;
+}
+
+void mqtt_publisher_format_status(char *out, size_t size)
+{
+	snprintf(out, size, "%s queued=%u sent=%u dropped=%u failed=%u last_error=%d",
+		mqtt_publisher_is_connected() ? "connected" : "disconnected",
+		(unsigned)atomic_get(&s_packets_queued), (unsigned)atomic_get(&s_packets_sent),
+		(unsigned)atomic_get(&s_packets_dropped), (unsigned)atomic_get(&s_packets_failed),
+		(int32_t)atomic_get(&s_publish_error));
 }
 
 void mqtt_publisher_reconnect(void)
@@ -526,4 +389,10 @@ void mqtt_publisher_reconnect(void)
 void mqtt_publisher_set_connect_cb(void (*cb)(void))
 {
 	s_connect_cb = cb;
+}
+
+void mqtt_publisher_set_time(uint32_t epoch)
+{
+	atomic_set(&s_time_offset, epoch - (uint32_t)(k_uptime_get() / 1000));
+	atomic_set(&s_time_valid, 1);
 }

@@ -14,7 +14,7 @@ struct Radio : mesh::Radio {
     bool receiving = false, ready = true, recv_mode = true, active = false;
     bool accept = true, completion = false, block_final_gate = false;
     unsigned receiving_queries = 0, attempts = 0, finished = 0, recoveries = 0;
-    unsigned completion_queries = 0, relaxations = 0, cad_ticks = 0, radio_ticks = 0;
+    unsigned completion_queries = 0, relaxations = 0, cad_ticks = 0, radio_ticks = 0, noise_ticks = 0;
     uint32_t airtime = 100, maintenance = mesh::MAINTENANCE_IDLE;
     int8_t cad_offset = 0;
     std::deque<std::vector<uint8_t>> incoming;
@@ -50,6 +50,7 @@ struct Radio : mesh::Radio {
     float getLastSNR() const override { return -2.25f; }
     float getLastRSSI() const override { return -90.0f; }
     bool cadRelaxOnTxStarvation() override { ++relaxations; return true; }
+    void triggerNoiseFloorCalibrate(int) override { ++noise_ticks; }
     void cadMaintenance() override { ++cad_ticks; }
     void radioMaintenance() override { ++radio_ticks; }
     int8_t getCadOffset() const override { return cad_offset; }

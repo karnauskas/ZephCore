@@ -34,8 +34,8 @@ namespace mesh {
 
 /* ========== Construction ========== */
 
-ObserverMesh::ObserverMesh(Radio &radio, MillisecondClock &ms, RTCClock &rtc)
-	: Dispatcher(radio, ms, _pkt_mgr),
+ObserverMesh::ObserverMesh(Radio &radio, MillisecondClock &ms, RTCClock &rtc, MainBoard &board)
+	: Dispatcher(radio, ms, _pkt_mgr), _board(board),
 	  _last_rssi(0.0f), _last_score(0.0f), _last_raw_len(0),
 	  _store(nullptr), _creds(nullptr), _rtc(&rtc), _start_uptime_secs(0)
 {
@@ -112,7 +112,7 @@ void ObserverMesh::buildStatusJson(const char *status, char *out, size_t out_siz
 		"unknown",
 #endif
 		FIRMWARE_VERSION,
-		0u,                                              /* battery_mv (observer has none) */
+		_board.getBattMilliVolts(),
 		uptime_secs,
 		0u,                                              /* debug_flags */
 		0u,                                              /* queue_len */
@@ -337,16 +337,19 @@ bool ObserverMesh::handleCLI(const char *command, char *reply, int reply_size)
 				 zc_wifi_station_is_connected() ? "connected" : "disconnected");
 
 		} else if (strcmp(key, "mqtt.status") == 0) {
-			snprintf(reply, reply_size, "%s",
-				 mqtt_publisher_is_connected() ? "connected" : "disconnected");
+			mqtt_publisher_format_status(reply, reply_size);
+			size_t used = strlen(reply);
+			snprintf(reply + used, reply_size - used, " rx_flood=%u rx_direct=%u rx_errors=%u",
+				(unsigned)getNumRecvFlood(), (unsigned)getNumRecvDirect(),
+				(unsigned)static_cast<LoRaRadio *>(_radio)->getPacketsRecvErrors());
 
 		} else if (strcmp(key, "mqtt.host") == 0) {
 			snprintf(reply, reply_size, "%s",
 				 (_creds && _creds->mqtt_host[0]) ? _creds->mqtt_host : "(not set)");
 
 		} else if (strcmp(key, "mqtt.user") == 0) {
-			snprintf(reply, reply_size, "%s",
-				 (_creds && _creds->mqtt_user[0]) ? _creds->mqtt_user : "(not set)");
+			snprintf(reply, reply_size, "v1_%s",
+				 _pubkey_hex);
 
 		} else if (strcmp(key, "mqtt.iata") == 0) {
 			snprintf(reply, reply_size, "%s",
@@ -354,7 +357,7 @@ bool ObserverMesh::handleCLI(const char *command, char *reply, int reply_size)
 
 		} else if (strcmp(key, "mqtt.port") == 0) {
 			snprintf(reply, reply_size, "%u",
-				 (_creds) ? (unsigned)_creds->mqtt_port : 8883u);
+				 (_creds) ? (unsigned)_creds->mqtt_port : 443u);
 
 		} else if (strcmp(key, "meshtimesync") == 0) {
 			_timesync.formatStatus(reply, reply_size,
@@ -534,19 +537,8 @@ bool ObserverMesh::handleCLI(const char *command, char *reply, int reply_size)
 			snprintf(reply, reply_size, "mqtt.tls=%u (reconnecting)", _creds->mqtt_tls);
 			mqtt_publisher_reconnect();
 
-		} else if ((val = find_val(rest, "mqtt.user")) != nullptr) {
-			strncpy(_creds->mqtt_user, val, sizeof(_creds->mqtt_user) - 1);
-			_creds->mqtt_user[sizeof(_creds->mqtt_user) - 1] = '\0';
-			observer_creds_save(_creds, _store->getBasePath());
-			snprintf(reply, reply_size, "mqtt.user=%s (reconnecting)", _creds->mqtt_user);
-			mqtt_publisher_reconnect();
-
-		} else if ((val = find_val(rest, "mqtt.password")) != nullptr) {
-			strncpy(_creds->mqtt_password, val, sizeof(_creds->mqtt_password) - 1);
-			_creds->mqtt_password[sizeof(_creds->mqtt_password) - 1] = '\0';
-			observer_creds_save(_creds, _store->getBasePath());
-			snprintf(reply, reply_size, "mqtt.password=*** (saved, reconnecting)");
-			mqtt_publisher_reconnect();
+		} else if (find_val(rest, "mqtt.user") || find_val(rest, "mqtt.password")) {
+			snprintf(reply, reply_size, "ERR MQTT authenticates with the node identity");
 
 		} else if ((val = find_val(rest, "mqtt.iata")) != nullptr) {
 			strncpy(_creds->mqtt_iata, val, sizeof(_creds->mqtt_iata) - 1);

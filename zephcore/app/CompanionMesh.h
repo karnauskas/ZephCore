@@ -234,6 +234,9 @@ protected:
 	uint32_t calcFloodTimeoutMillisFor(uint32_t pkt_airtime_millis) const override;
 	uint32_t calcDirectTimeoutMillisFor(uint32_t pkt_airtime_millis, uint8_t path_len) const override;
 	void onSendTimeout() override;
+	int searchChannelsByHash(const uint8_t *hash, mesh::GroupChannel channels[], int max_matches) override;
+	void onGroupDataRecv(mesh::Packet *packet, uint8_t type, const mesh::GroupChannel& channel,
+		uint8_t *data, size_t len) override;
 	void onChannelMessageRecv(const mesh::GroupChannel &channel, mesh::Packet *pkt, uint32_t timestamp, const char *text) override;
 	void onChannelDataRecv(const mesh::GroupChannel &channel, mesh::Packet *pkt, uint16_t data_type,
 		const uint8_t *data, size_t data_len) override;
