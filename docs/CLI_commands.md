@@ -247,7 +247,7 @@ All `set uplink.*` changes are saved immediately and only applied after reboot.
 | `get uplink.mqtt.host` | Configured MQTT broker host |
 | `get uplink.mqtt.port` | Configured MQTT broker port |
 | `get uplink.mqtt.tls` | MQTT TLS mode (`0`/`1`) |
-| `get uplink.mqtt.user` | Configured MQTT username |
+| `get uplink.mqtt.user` | Derived `v1_<PUBLIC_KEY>` username |
 | `get uplink.mqtt.iata` | Configured IATA/site code used in MQTT topic |
 | `set uplink.enable <on\|off>` | Enable or disable repeater uplink *(reboot required)* |
 | `set uplink.wifi.ssid <ssid>` | Set WiFi SSID *(reboot required)* |
@@ -255,8 +255,6 @@ All `set uplink.*` changes are saved immediately and only applied after reboot.
 | `set uplink.mqtt.host <host>` | Set MQTT host *(reboot required)* |
 | `set uplink.mqtt.port <port>` | Set MQTT port 1–65535 *(reboot required)* |
 | `set uplink.mqtt.tls <0\|1>` | Set MQTT TLS mode *(reboot required)* |
-| `set uplink.mqtt.user <user>` | Set MQTT username *(reboot required)* |
-| `set uplink.mqtt.password <pass>` | Set MQTT password *(reboot required)* |
 | `set uplink.mqtt.iata <code>` | Set MQTT site code *(reboot required)* |
 
 ---
@@ -295,7 +293,7 @@ Companion builds only. Local only: they run from USB and the app's CLI, and a re
 
 ## Observer (ZephCore only)
 
-The observer role (ESP32, `boards/common/observer.conf`) has its own CLI and, apart from `reboot` and `erase`, none of the commands in the other sections: no `ver`, `set radio` or `set tx`. USB serial only — an observer never transmits, so there is no remote admin. A `get` replies with the bare value, without the `> ` prefix; a `set` echoes `key=value`; errors start with `ERR`. Every `set` is saved and applied at once, with no reboot.
+The observer role (ESP32, `boards/common/observer.conf`) has its own CLI and, apart from `reboot` and `erase`, none of the commands in the other sections: no `ver`, `set radio` or `set tx`. USB serial only — an observer never transmits, so there is no remote admin. A `get` replies with the bare value, without the `> ` prefix; a `set` echoes `key=value`; errors start with `ERR`. Settings are saved and applied immediately.
 
 | Command | Description |
 |---------|-------------|
@@ -312,8 +310,9 @@ The observer role (ESP32, `boards/common/observer.conf`) has its own CLI and, ap
 | `get wifi.ssid` | Configured WiFi network, or `(not set)` |
 | `get wifi.status` | `connected` or `disconnected` |
 | `get mqtt.status` | `connected` or `disconnected` |
-| `get mqtt.host` / `get mqtt.user` / `get mqtt.iata` | The saved value, or `(not set)` |
-| `get mqtt.port` | Broker port (default 8883) |
+| `get mqtt.host` / `get mqtt.iata` | The saved value, or `(not set)` |
+| `get mqtt.user` | Derived `v1_<PUBLIC_KEY>` username |
+| `get mqtt.port` | Broker port (default 443) |
 | `get mqtt.tls` | `0` or `1` (default 1) |
 | `get meshtimesync` | Mesh time-sync state and dry-run, same format as on a repeater |
 | `set name <name>` | Node name |
@@ -328,9 +327,16 @@ The observer role (ESP32, `boards/common/observer.conf`) has its own CLI and, ap
 | `set mqtt.host <host>` | MQTT broker host; reconnects MQTT, as do the four below |
 | `set mqtt.port <port>` | 1–65535 |
 | `set mqtt.tls <0\|1>` | TLS off or on |
-| `set mqtt.user <user>` | MQTT username |
-| `set mqtt.password <pass>` | MQTT password. There is no `get` for it |
 | `set mqtt.iata <code>` | Location code used in the MQTT topics (e.g. `BUD`); rebuilds the topics and reconnects MQTT |
+
+The MQTT broker uses WebSockets at `/` on port **443**, with TLS enabled for WSS.
+For an existing saved configuration use `set mqtt.port 443` and `set mqtt.tls 1`.
+Authentication is automatic: `v1_<UPPERCASE_PUBLIC_KEY>` username and an Ed25519
+signed token with `publicKey`, `iat`, one-hour `exp`, and `aud` equal to the broker
+hostname. Tokens are regenerated per connection and require SNTP time. Static
+username/password configuration is not used; the private key stays on the node.
+Repeater commands use the `uplink.` prefix. Only one broker is supported.
+
 
 ---
 
@@ -604,3 +610,40 @@ The engine does not rotate identity keys, inspect chat/raw payloads, recall
 app-cached exports or hide the true position from the local UI/device-info API.
 An old GPS fix cannot detect a new zone entry. See
 [ADR 0015](adr/0015-companion-location-privacy.md) for the full limits.
+
+### Pingbot (companion and repeater)
+
+- `get pingbot` — show `on` or `off`.
+- `set pingbot on|off|default` — enable or disable the public `#test` responder;
+  `default` is off. Saved in `prefs.json` and effective immediately.
+
+When enabled, send exactly `!ping` in public `#test`. The node listens without
+using a saved channel slot and replies, for example:
+
+```text
+MyNode: Pong @Alice RSSI=-97dBm SNR=-0.25dB hops=2 ids=ABCD,1234
+```
+
+RSSI and SNR describe the last link into the responding node. `hops` counts
+recorded repeaters, excluding sender and responder; `ids` contains their path
+hash prefixes, not full public keys. Direct reception shows `hops=0 ids=none`.
+Long paths end in `,...`; the count still describes the complete received path.
+Observer and room-server firmware do not offer this command.
+
+### MQTT packet diagnostics
+
+`get mqtt.status` on an observer, or `get uplink.mqtt.status` on a repeater with
+MQTT uplink, reports e.g.:
+
+```text
+connected queued=120 sent=119 dropped=0 failed=1 last_error=-5
+```
+
+Counters accumulate since boot and exclude status messages. `queued` counts
+packet messages admitted to the queue; `dropped` counts queue overflow; `failed`
+counts failed packet publish calls. `last_error` retains the last packet-publish
+error (0 until one occurs). `sent` counts successful QoS 0 transport writes and
+does not confirm broker acceptance or collector processing. The observer also appends `rx_flood`, `rx_direct` and `rx_errors`, using the
+same counters as the LCD. Read twice while receiving LoRa traffic to see which
+stage advances. These concurrent counters
+are individually atomic and may change while the status is being formatted.

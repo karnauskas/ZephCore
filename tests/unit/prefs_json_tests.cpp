@@ -288,3 +288,35 @@ TEST(privacy_json, "UNIT-PRIVACY-009", "Privacy settings round trip only in comp
 	CHECK(PrivacyEngine::command(recovered.privacy, "privacy off", reply, sizeof(reply)));
 	CHECK(!engine.blocked(recovered.privacy, {55, 21, 0}, 1735689600, 2));
 }
+
+TEST(mqtt_prefs, "UNIT-MQTT-003", "Removed secondary broker settings are ignored and omitted when saving prefs") {
+    NodePrefs p = defaults();
+    MemStream old("{name:\"Observer\",zc:{mqtt2:{host:\"old.example\",port:443,tls:1}}}");
+    CHECK(serverPrefsFromJson(p, old));
+    CHECK(std::strcmp(p.node_name, "Observer") == 0);
+    MemStream out;
+    CHECK(serverPrefsToJson(p, out));
+    CHECK(out.data.find("mqtt2") == std::string::npos);
+}
+
+TEST(pingbot_prefs, "UNIT-PINGBOT-004", "Pingbot defaults off persists in both JSON roles and leaves legacy bytes unchanged") {
+	NodePrefs p = defaults();
+	CHECK(p.pingbot == 0);
+	auto companion_before = companionBytes(p);
+	uint8_t before[SERVER_PREFS_SIZE], after[SERVER_PREFS_SIZE];
+	serverPrefsEncode(p, before, sizeof(before));
+	p.pingbot = 1;
+	CHECK(companionBytes(p) == companion_before);
+	serverPrefsEncode(p, after, sizeof(after));
+	CHECK(memcmp(before, after, sizeof(before)) == 0);
+	for (bool companion : {false, true}) {
+		MemStream encoded;
+		CHECK(companion ? companionPrefsToJson(p, encoded) : serverPrefsToJson(p, encoded));
+		NodePrefs restored = defaults();
+		CHECK(companion ? companionPrefsFromJson(restored, encoded) : serverPrefsFromJson(restored, encoded));
+		CHECK(restored.pingbot == 1);
+	}
+	p.pingbot = 2;
+	sanitizeNodePrefs(&p);
+	CHECK(p.pingbot == 0);
+}

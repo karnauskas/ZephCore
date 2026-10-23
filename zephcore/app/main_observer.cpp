@@ -39,9 +39,15 @@ LOG_MODULE_REGISTER(zephcore_observer_main, CONFIG_ZEPHCORE_MAIN_LOG_LEVEL);
 #include <src/RadioIncludes.h>
 #include <ZephyrWiFiStation.h>
 #include <ZephyrMQTTPublisher.h>
+#include <helpers/MqttAuth.h>
 #include "observer_creds.h"
 #include <helpers/boot_prefs.h>
 #include <src/mesh_events.h>
+
+#ifdef CONFIG_ZEPHCORE_UI_DISPLAY
+#include <helpers/ui/display.h>
+#include <helpers/ui/observer_display.h>
+#endif
 
 /* ========== LED (optional) ========== */
 
@@ -57,7 +63,12 @@ static const struct gpio_dt_spec led0 = GPIO_DT_SPEC_GET(LED0_NODE, gpios);
 /* The shared bits are in mesh_events.h; these are the observer's own. */
 #define MESH_EVENT_STATUS       BIT(MESH_EVENT_ROLE_BASE)      /* 300 s status publish */
 #define MESH_EVENT_MQTT_CONNECT BIT(MESH_EVENT_ROLE_BASE + 1)  /* MQTT (re)connected — publish status+self-advert on main */
-#define MESH_EVENT_ALL       (MESH_EVENT_LORA_RX | MESH_EVENT_CLI_RX | MESH_EVENT_STATUS | MESH_EVENT_MQTT_CONNECT)
+#ifdef CONFIG_ZEPHCORE_UI_DISPLAY
+#define MESH_EVENT_DISPLAY BIT(MESH_EVENT_ROLE_BASE + 2)
+#else
+#define MESH_EVENT_DISPLAY 0
+#endif
+#define MESH_EVENT_ALL       (MESH_EVENT_DISPLAY | MESH_EVENT_LORA_RX | MESH_EVENT_CLI_RX | MESH_EVENT_STATUS | MESH_EVENT_MQTT_CONNECT)
 
 static struct k_event mesh_events;
 
@@ -121,6 +132,15 @@ static void status_timer_fn(struct k_timer *timer)
 
 K_TIMER_DEFINE(status_timer, status_timer_fn, NULL);
 
+#ifdef CONFIG_ZEPHCORE_UI_DISPLAY
+static void display_timer_fn(struct k_timer *timer)
+{
+	ARG_UNUSED(timer);
+	k_event_post(&mesh_events, MESH_EVENT_DISPLAY);
+}
+K_TIMER_DEFINE(display_timer, display_timer_fn, NULL);
+#endif
+
 /* Observer never transmits — TX done callback not needed */
 
 /* ========== Help banner ========== */
@@ -174,8 +194,7 @@ static void print_banner(void)
 	cli_println("set mqtt.host <hostname>   MQTT broker hostname");
 	cli_println("set mqtt.port <port>       MQTT broker port (default 8883)");
 	cli_println("set mqtt.tls  <0|1>        TLS on/off (default 1)");
-	cli_println("set mqtt.user <username>   MQTT username");
-	cli_println("set mqtt.password <pass>   MQTT password");
+	cli_println("MQTT auth: node identity; audience = broker hostname");
 	cli_println("set mqtt.iata <code>       Location code (e.g. BUD BTS VIE SEA)");
 	cli_println("");
 	cli_println("--- Configure: node ---");
@@ -205,7 +224,7 @@ static void print_banner(void)
 	cli_println("get mqtt.host              MQTT broker hostname");
 	cli_println("get mqtt.port              MQTT broker port");
 	cli_println("get mqtt.tls               MQTT TLS on/off");
-	cli_println("get mqtt.user              MQTT username");
+	cli_println("get mqtt.user              Derived public-key username");
 	cli_println("get mqtt.iata              Location code");
 	cli_println("get meshtimesync           Time-sync consensus state (dry-run)");
 	cli_println("");
@@ -304,6 +323,7 @@ static atomic_t s_sntp_synced;
 static void time_sync_cb(uint32_t unix_ts)
 {
 	s_rtc_clock.setCurrentTime(unix_ts);
+	mqtt_publisher_set_time(unix_ts);
 	atomic_set(&s_sntp_synced, 1);
 	LOG_INF("RTC synced from SNTP: %u", unix_ts);
 }
@@ -320,7 +340,7 @@ static const struct device *const lora_dev = DEVICE_DT_GET(DT_ALIAS(lora0));
 
 static mesh::LoRaRadio lora_radio(lora_dev, s_board);
 
-static mesh::ObserverMesh observer_mesh(lora_radio, s_ms_clock, s_rtc_clock);
+static mesh::ObserverMesh observer_mesh(lora_radio, s_ms_clock, s_rtc_clock, s_board);
 static RepeaterDataStore  data_store;
 
 /* ========== reboot / erase ========== */
@@ -449,6 +469,8 @@ int main(void)
 	/* Print welcome banner */
 	print_banner();
 
+	mqtt_auth_init(observer_mesh.getSelfId());
+
 	/* Start WiFi (non-blocking — MQTT thread waits for WIFI_READY_BIT) */
 	zc_wifi_station_start(s_creds.wifi_ssid, s_creds.wifi_psk, time_sync_cb,
 			      true /* WiFi power save */);
@@ -472,17 +494,38 @@ int main(void)
 
 	LOG_INF("Observer event loop running");
 
+#ifdef CONFIG_ZEPHCORE_UI_DISPLAY
+	const bool display_ready = mc_display_init() == 0;
+	int64_t last_heard_ms = -1;
+	if (display_ready) {
+		const auto interval = K_SECONDS(mc_display_is_epd() ? 30 : 1);
+		k_timer_start(&display_timer, K_NO_WAIT, interval);
+	}
+#endif
 	lora_radio.bootComplete();
 	/* ========== Event loop ========== */
 	for (;;) {
-		uint32_t ev = k_event_wait(&mesh_events, MESH_EVENT_ALL,
-					   false, K_FOREVER);
+		uint32_t next = observer_mesh.msUntilNextMaintenance();
+		uint32_t ev = k_event_wait(&mesh_events, MESH_EVENT_ALL, false,
+			next == mesh::MAINTENANCE_IDLE ? K_FOREVER : K_MSEC(next));
 		k_event_clear(&mesh_events, ev);
 		(void)power_budget_factor();
 
 		if (ev & MESH_EVENT_LORA_RX) {
+#ifdef CONFIG_ZEPHCORE_UI_DISPLAY
+			const uint32_t flood = observer_mesh.getNumRecvFlood();
+			const uint32_t direct = observer_mesh.getNumRecvDirect();
+#endif
 			observer_mesh.loop();
+#ifdef CONFIG_ZEPHCORE_UI_DISPLAY
+			if (flood != observer_mesh.getNumRecvFlood() ||
+			    direct != observer_mesh.getNumRecvDirect()) {
+				last_heard_ms = k_uptime_get();
+			}
+#endif
 		}
+
+		observer_mesh.maintenanceLoop();
 
 		if (ev & MESH_EVENT_CLI_RX) {
 			process_cli_rx();
@@ -499,6 +542,18 @@ int main(void)
 			observer_mesh.publishStatus("online");
 			observer_mesh.publishSelfAdvert();
 		}
+#ifdef CONFIG_ZEPHCORE_UI_DISPLAY
+		if (display_ready && (ev & MESH_EVENT_DISPLAY)) {
+			const int64_t now = k_uptime_get();
+			observer_display_draw({
+				observer_mesh.getNumRecvFlood(), observer_mesh.getNumRecvDirect(),
+				lora_radio.getPacketsRecvErrors(), (uint64_t)(now / 1000),
+				last_heard_ms < 0 ? 0 : (uint64_t)((now - last_heard_ms) / 1000),
+				zc_wifi_station_is_connected(), mqtt_publisher_is_connected(),
+				last_heard_ms >= 0,
+			});
+		}
+#endif
 	}
 
 	return 0;

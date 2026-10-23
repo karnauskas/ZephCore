@@ -620,6 +620,23 @@ mesh::Mesh
 └── ObserverMesh (listen-only; publishes packets to MQTT over WiFi — ESP32)
 ```
 
+### Public channel pingbot
+
+Companions and repeaters can enable `set pingbot on` (default off; `zc.pingbot`
+in `prefs.json`). `helpers/PingBot` adds public `#test` to receive-channel lookup
+without a stored channel slot, and handles exactly `!ping` after the normal
+`sender: ` prefix. Configured companion channels continue to reach the app.
+Only group text floods trigger a reply; normal mesh deduplication and the TX
+queue/duty-cycle rules apply. Work runs on the mesh thread without heap allocation.
+The response addresses the sender as `@name` (up to 31 bytes) and includes the
+responder name, last-link RSSI/SNR, recorded repeater
+hop count and comma-separated path ID prefixes in reception order. Hop IDs use
+the packet's one-, two- or three-byte hash width; they are not full public keys.
+Zero hops means direct reception. The 160-byte text budget truncates whole hop
+IDs with `,...` while retaining the full count. Repeater responses use the
+request's region scope through `sendFloodReply`; companions use channel scope.
+Observers remain listen-only; room servers do not run pingbot.
+
 ### 6.2 CompanionMesh
 
 **Location privacy**: `helpers/PrivacyEngine` filters the companion's own advert
@@ -819,6 +836,19 @@ Headless store-and-forward shared message room (BBS). Clients log in with the ad
 
 Listen-only node (ESP32 only): receives LoRa packets and publishes them to an MQTT broker over WiFi STA (`adapters/mqtt/`, `adapters/wifi/`). Never transmits. Configured at runtime via serial CLI (credentials in `observer_creds.cpp`); build with `boards/common/observer.conf`.
 
+Observers with `CONFIG_ZEPHCORE_UI_DISPLAY` use `helpers/ui/observer_display.*`
+and `observer_text.cpp` for a status screen: WiFi ready (DHCP/SNTP completed),
+MQTT session up, parsed RX/flood/direct counts, driver RX errors, uptime and age
+of the last parsed packet (`never` until the first reception). A display timer
+posts to the main event loop every second (30 seconds for e-paper); the main
+thread snapshots the counters and renders using the shared display driver.
+OLED/TFT stays on; e-paper retains its screen between updates. Displays with
+fewer than eight text rows cycle through the rows in five-second pages
+(30 seconds on e-paper).
+Headless observers allocate no display timer or last-heard state. On the TTGO
+128×64 observer diagnostic build, this adds 72 bytes of static DRAM and uses
+the shared display driver's 1024-byte framebuffer from the kernel heap.
+
 ### 6.5.1 KISS modem
 
 Upstream's `examples/kiss_modem` (protocol: [kiss_modem_protocol.md](kiss_modem_protocol.md)). `app/KissModem.cpp/h`
@@ -984,7 +1014,9 @@ flag every LED driver consults — heartbeat and unread-message LEDs in `helpers
 `lora-tx-led` in `ZephyrBoard::onBeforeTransmit()`, and the message/shutdown flashes. It lives
 outside the UI layer because `ui_common.c` is only compiled when a UI is enabled, while a headless
 repeater still blinks on every transmit. `ui_common.c` overrides the weak `zephcore_leds_ui_sync()`
-hook so a CLI change also stops a lit heartbeat and refreshes the UI's LEDs page. Persisted in
+hook so a CLI change also stops a lit heartbeat and refreshes the UI's LEDs page.
+Before heartbeat initialization, the hook only synchronizes the UI state; applying boot
+preferences does not schedule heartbeat work in roles that never initialize it. Persisted in
 `NodePrefs.leds_disabled` (companion offset 93; repeater offset 120, magic-encoded — see §13).
 Does not cover the display backlight, which has its own UI brightness setting (`display_brightness`).
 
@@ -1009,6 +1041,28 @@ driver. Persisted in `prefs.json` as `zc.leds_brightness`; it is not part of the
   the station: up at CONNACK, down when the session ends for any reason. Keepalive: PINGREQ once a quarter of
   the 60 s keepalive is left, so a broker that enforces the keepalive without grace does not close an idle
   session.
+  One broker session uses the existing worker and eight-message queue with a 1024-byte TX buffer.
+  It connects over WebSockets at `/` (port default 443); `tls=1` selects WSS.
+  Authentication uses a startup copy of the node identity: username `v1_<UPPERCASE_PUBLIC_KEY>`,
+  password a freshly signed token on each connection. Its `publicKey`, `iat`, `exp` (one hour),
+  and `aud` (exact configured hostname) follow meshcore-decoder's contract: base64url header/claims,
+  hex Ed25519 signature, `alg=Ed25519`. An SNTP epoch/uptime anchor supplies time without reading
+  mesh state; without SNTP the worker does not connect. Retained status and LWT include `origin_id`.
+  The existing `mqtt.*` / `uplink.mqtt.*` host, port and TLS commands and frozen `obs_creds`
+  layout remain; static username/password fields are unused. There is no secondary broker
+  configuration or session. The observer screen shows MQTT up/down.
+  Full online status (including battery mV, uptime seconds and signed noise floor dBm in `stats`)
+  is retained; the worker does not overwrite it with a minimal online payload. Observer voltage
+  comes from `MainBoard`, and its main-thread event wait follows radio maintenance deadlines so
+  noise-floor sampling continues on an idle channel. Boards without a voltage measurement report 0.
+  Connection-stage logs distinguish WSS/CONNECT, socket/read and CONNACK timeout failures.
+  `get mqtt.status` (observer) and `get uplink.mqtt.status` (repeater) include boot totals for
+  packet messages queued, sent, dropped on queue overflow and failed during publishing, plus
+  the last packet-publish error. The observer appends the LCD flood/direct RX and radio error
+  counters to the same CLI reply for comparison. Status messages are excluded; atomics bridge the producer and
+  worker. QoS 0 `sent` means the local transport accepted the write, not broker/collector delivery.
+  The WebSocket poll patch reports unread receive-buffer bytes as readable in native and offloaded
+  polling, so MQTT packets split across WebSocket frames progress after the socket has been drained.
   TLS is used without certificate verification, but the chain still has to be parsed: the uplink and observer
   builds carry P-256 and P-384 with SHA-256 and SHA-384 for that.
 - **`adapters/ota/wifi_ota.c`**: WiFi SoftAP + HTTP firmware upload to MCUboot slot1 (ESP32, requires `--sysbuild`)

@@ -112,7 +112,7 @@ TEST(dispatch_maintenance, "UNIT-DISPATCH-011", "Maintenance never consumes TX c
     f.dispatcher.maintenanceLoop(); CHECK(f.radio.completion_queries == queries && f.radio.completion);
     f.radio.cad_offset = 2; f.dispatcher.maintenanceLoop(); f.dispatcher.maintenanceLoop();
     CHECK(f.dispatcher.offsets == std::vector<int8_t>({2}));
-    CHECK(f.radio.cad_ticks == 3 && f.radio.radio_ticks == 3);
+    CHECK(f.radio.cad_ticks == 3 && f.radio.radio_ticks == 3 && f.radio.noise_ticks == 3);
     f.dispatcher.loop(); CHECK(f.dispatcher.getNumSentFlood() == 1 && f.pool.getFreeCount() == 32);
 }
 TEST(dispatch_stall, "UNIT-DISPATCH-012", "Stall watchdog latches without perpetual immediate deadline") {

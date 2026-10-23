@@ -1,0 +1,151 @@
+WebSocket: report unread receive-buffer data as POLLIN.
+
+mqtt-mc.atvirastinklas.lt returns CONNACK as four binary WebSocket frames
+(82 01 20 82 01 02 82 01 00 82 01 05 for an unauthenticated diagnostic
+CONNECT). mqtt_read_message_chunk asks for the two-byte fixed header; the
+first websocket_recv_msg returns one byte and retains the other frames.
+The MQTT reader returns until the next poll, but polling delegates only to
+the underlying socket, whose data has already been consumed. The connection
+then expires waiting for CONNACK. Authentication acceptance is separate.
+
+Report buffered bytes in both native and offloaded poll paths. Delegate to
+the underlying transport to preserve its event bookkeeping and errors. No
+application polling, additional retry, or timeout change is needed.
+
+The full changed functions are retained as patch context so host tests can
+compile their postimage without a Zephyr checkout.
+
+diff --git a/subsys/net/lib/websocket/websocket.c b/subsys/net/lib/websocket/websocket.c
+index f08f0a77794..4f636799f28 100644
+--- a/subsys/net/lib/websocket/websocket.c
++++ b/subsys/net/lib/websocket/websocket.c
+@@ -529,36 +529,42 @@ static int websocket_close_vmeth(void *obj)
+ static inline int websocket_poll_offload(struct zsock_pollfd *fds, int nfds,
+ 					 int timeout)
+ {
+ 	int fd_backup[CONFIG_ZVFS_POLL_MAX];
++	bool buffered[CONFIG_ZVFS_POLL_MAX] = { false };
+ 	const struct fd_op_vtable *vtable;
+ 	void *ctx;
+ 	int ret = 0;
+ 	int i;
+ 
+ 	/* Overwrite websocket file descriptors with underlying ones. */
+ 	for (i = 0; i < nfds; i++) {
+ 		fd_backup[i] = fds[i].fd;
+ 
+ 		ctx = zvfs_get_fd_obj(fds[i].fd,
+ 				   (const struct fd_op_vtable *)
+ 						     &websocket_fd_op_vtable,
+ 				   0);
+ 		if (ctx == NULL) {
+ 			continue;
+ 		}
+ 
++		buffered[i] = (fds[i].events & ZSOCK_POLLIN) &&
++			      ((struct websocket_context *)ctx)->recv_buf.count > 0;
++		if (buffered[i]) {
++			timeout = 0;
++		}
+ 		fds[i].fd = ((struct websocket_context *)ctx)->real_sock;
+ 	}
+ 
+ 	/* Get offloaded sockets vtable. */
+ 	ctx = zvfs_get_fd_obj_and_vtable(fds[0].fd,
+ 				      (const struct fd_op_vtable **)&vtable,
+ 				      NULL);
+ 	if (ctx == NULL) {
+ 		errno = EINVAL;
+ 		ret = -1;
+ 		goto exit;
+ 	}
+ 
+ 	ret = zvfs_fdtable_call_ioctl(vtable, ctx, ZFD_IOCTL_POLL_OFFLOAD,
+ 				   fds, nfds, timeout);
+@@ -566,8 +572,14 @@ static inline int websocket_poll_offload(struct zsock_pollfd *fds, int nfds,
+ exit:
+ 	/* Restore original fds. */
+ 	for (i = 0; i < nfds; i++) {
+ 		fds[i].fd = fd_backup[i];
++		if (ret >= 0 && buffered[i]) {
++			if (fds[i].revents == 0) {
++				ret++;
++			}
++			fds[i].revents |= ZSOCK_POLLIN;
++		}
+ 	}
+ 
+ 	return ret;
+ }
+@@ -575,50 +587,69 @@ exit:
+ static int websocket_ioctl_vmeth(void *obj, unsigned int request, va_list args)
+ {
+ 	struct websocket_context *ctx = obj;
+ 
+ 	switch (request) {
+ 	case ZFD_IOCTL_POLL_OFFLOAD: {
+ 		struct zsock_pollfd *fds;
+ 		int nfds;
+ 		int timeout;
+ 
+ 		fds = va_arg(args, struct zsock_pollfd *);
+ 		nfds = va_arg(args, int);
+ 		timeout = va_arg(args, int);
+ 
+ 		return websocket_poll_offload(fds, nfds, timeout);
+ 	}
+ 
+ 	case ZFD_IOCTL_SET_LOCK:
+ 		/* Ignore, don't want to overwrite underlying socket lock. */
+ 		return 0;
+ 
+ 	default: {
+ 		const struct fd_op_vtable *vtable;
+ 		void *core_obj;
+ 
+ 		core_obj = zvfs_get_fd_obj_and_vtable(
+ 				ctx->real_sock,
+ 				(const struct fd_op_vtable **)&vtable,
+ 				NULL);
+ 		if (core_obj == NULL) {
+ 			errno = EBADF;
+ 			return -1;
+ 		}
+ 
+-		/* Pass the call to the core socket implementation. */
+-		return vtable->ioctl(core_obj, request, args);
++		struct zsock_pollfd *pfd = NULL;
++		va_list copy;
++		int ret;
++
++		if (request == ZFD_IOCTL_POLL_PREPARE || request == ZFD_IOCTL_POLL_UPDATE) {
++			va_copy(copy, args);
++			pfd = va_arg(copy, struct zsock_pollfd *);
++			va_end(copy);
++		}
++
++		ret = vtable->ioctl(core_obj, request, args);
++		if (pfd != NULL && (pfd->events & ZSOCK_POLLIN) && ctx->recv_buf.count > 0) {
++			if (request == ZFD_IOCTL_POLL_PREPARE && (ret == 0 || ret == -EALREADY)) {
++				return -EALREADY;
++			}
++			if (request == ZFD_IOCTL_POLL_UPDATE && (ret == 0 || ret == -EAGAIN)) {
++				pfd->revents |= ZSOCK_POLLIN;
++				return 0;
++			}
++		}
++		return ret;
+ 	}
+ 	}
+ 
+ 	return 0;
+ }
+ 
+ #if !defined(CONFIG_NET_TEST)
+ /* How long to back off when the stack is out of network buffers */
+ #define NO_BUFS_RETRY K_MSEC(10)
+ 
+ /* Send the whole message before the deadline: write the socket without
+  * blocking and wait for it to become writable until the deadline. On
+  * failure, *sent tells how much of the message the socket had accepted.
+  */

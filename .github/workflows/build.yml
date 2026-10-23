@@ -383,6 +383,8 @@ jobs:
         west build -b xiao_esp32c3 zephcore --pristine -- -DEXTRA_CONF_FILE="boards/common/kiss_modem.conf"
         west build -b ttgo_lora32/esp32/procpu zephcore --pristine
         west build -b ttgo_lora32/esp32/procpu zephcore --pristine -- -DEXTRA_CONF_FILE="boards/common/repeater.conf"
+        west build -b ttgo_lora32/esp32/procpu zephcore --pristine -- -DEXTRA_CONF_FILE="boards/common/observer.conf"
+        west build -b heltec_wifi_lora32_v3/esp32s3/procpu zephcore --pristine --sysbuild -- -DEXTRA_CONF_FILE="boards/common/repeater.conf;boards/common/repeater_uplink.conf" -Dzephcore_CONFIG_ZEPHCORE_ROLE_REPEATER=y
 
     - name: ccache stats
       if: always()

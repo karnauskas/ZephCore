@@ -164,6 +164,10 @@ protected:
     return (uint8_t)(100.0f / (_prefs.airtime_factor + 1.0f) + 0.5f);
   }
 
+  // ZEPHCORE: opt-in public channel responder.
+	int searchChannelsByHash(const uint8_t *hash, mesh::GroupChannel channels[], int max_matches) override;
+	void onGroupDataRecv(mesh::Packet *packet, uint8_t type, const mesh::GroupChannel& channel,
+		uint8_t *data, size_t len) override;
   bool allowPacketForward(const mesh::Packet* packet) override;
   const char* getLogDateTime() override;
   void logRxRaw(float snr, float rssi, const uint8_t raw[], int len) override;

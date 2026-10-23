@@ -264,7 +264,8 @@ The main thread waits on `MESH_EVENT_ALL`; the shared bits are in `src/mesh_even
 transport or CLI RX 2, housekeeping/maintenance 3, GPS action 4, TX drain 5; bit 6 free; role bits from 7).
 **Scheduling differs per role by design**: the repeater and room server are deadline-driven (the loop arms a
 one-shot for the next due item, ~0.07 idle wakes/s), the companion keeps a periodic 5 s housekeeping tick because
-it polls external state. Repeater and room server share one loop (`server_main_common.cpp`).
+it polls external state. The observer uses the radio maintenance deadline as its event-wait
+timeout, so noise-floor sampling runs even without packet arrivals. Repeater and room server share one loop (`server_main_common.cpp`).
 
 ---
 

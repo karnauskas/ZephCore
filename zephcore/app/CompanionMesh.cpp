@@ -1,3 +1,4 @@
+#include <helpers/PingBot.h>
 /*
  * SPDX-License-Identifier: MIT
  * CompanionMesh implementation
@@ -3483,4 +3484,28 @@ bool CompanionMesh::handleCmdSendRawPacket(const uint8_t *data, size_t len)
 		writeErrFrame(ERR_ILLEGAL_ARG);
 	}
 	return true;
+}
+
+// ZEPHCORE: shared pingbot parsing and formatting, on the mesh thread.
+int CompanionMesh::searchChannelsByHash(const uint8_t *hash, mesh::GroupChannel channels[], int max_matches)
+{
+	int count = BaseChatMesh::searchChannelsByHash(hash, channels, max_matches);
+	return pingbotSearch(prefs.pingbot, hash, channels, count, max_matches);
+}
+
+void CompanionMesh::onGroupDataRecv(mesh::Packet *packet, uint8_t type, const mesh::GroupChannel& channel,
+	uint8_t *data, size_t len)
+{
+	if (type == PAYLOAD_TYPE_GRP_TXT) {
+		uint8_t payload[PINGBOT_PAYLOAD_SIZE];
+		size_t size = pingbotReply(prefs.pingbot, channel, *packet, data, len,
+			(int)_radio->getLastRSSI(), prefs.node_name, getRTCClock()->getCurrentTime(), payload);
+		if (size) {
+			uint32_t timestamp = getRTCClock()->getCurrentTimeUnique();
+			memcpy(payload, &timestamp, sizeof(timestamp));
+			auto *reply = createGroupDatagram(PAYLOAD_TYPE_GRP_TXT, channel, payload, size);
+			if (reply) sendFloodScoped(channel, reply);
+		}
+	}
+	if (findChannelIdx(channel) >= 0) BaseChatMesh::onGroupDataRecv(packet, type, channel, data, len);
 }

@@ -1019,6 +1019,10 @@ void CommonCLI::handleGetCmd(uint32_t sender_timestamp, const char* command, cha
 	} else if (strcmp(config, "advert.adaptive") == 0) {
 		snprintf(reply, CLI_REPLY_SIZE, "> %s", _prefs->adaptive_advert ? "on" : "off");
 #endif
+#if defined(CONFIG_ZEPHCORE_ROLE_REPEATER) || defined(CONFIG_ZEPHCORE_ROLE_COMPANION)
+	} else if (strcmp(config, "pingbot") == 0) {
+		snprintf(reply, CLI_REPLY_SIZE, "> %s", _prefs->pingbot ? "on" : "off");
+#endif
 	// ZEPHCORE: common reserve policy.
 	} else if (strcmp(config, "power.budget") == 0) {
 		snprintf(reply, CLI_REPLY_SIZE, "> %s factor=%u", _prefs->adaptive_power ? "on" : "off", power_budget_factor());
@@ -1447,6 +1451,17 @@ void CommonCLI::handleSetCmd(uint32_t sender_timestamp, const char* command, cha
 			_prefs->adaptive_advert = (uint8_t)on;
 			_callbacks->updateAdvertTimer();
 			_callbacks->updateFloodAdvertTimer();
+			savePrefs();
+			strcpy(reply, "OK");
+		}
+#endif
+#if defined(CONFIG_ZEPHCORE_ROLE_REPEATER) || defined(CONFIG_ZEPHCORE_ROLE_COMPANION)
+	} else if (memcmp(config, "pingbot ", 8) == 0) {
+		int on = cliOnOff(&config[8], cliDefaults()->pingbot);
+		if (on < 0) {
+			strcpy(reply, "Error: must be on, off or default");
+		} else {
+			_prefs->pingbot = (uint8_t)on;
 			savePrefs();
 			strcpy(reply, "OK");
 		}

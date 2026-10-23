@@ -3,6 +3,21 @@
   "profile": "quick",
   "cases": [
     {
+      "id": "UNIT-OBSERVER-001",
+      "name": "Observer screen shows link states counts and never heard",
+      "source": "tests/unit/observer_display_tests.cpp"
+    },
+    {
+      "id": "UNIT-OBSERVER-002",
+      "name": "Observer uptime and last heard handle day boundaries and bounded output",
+      "source": "tests/unit/observer_display_tests.cpp"
+    },
+    {
+      "id": "UNIT-LED-001",
+      "name": "Boot LED preferences wait for heartbeat initialization",
+      "source": "tests/unit/led_lifecycle_tests.cpp"
+    },
+    {
       "id": "UNIT-ADVERT-001",
       "name": "Independent advertisement vector",
       "source": "tests/unit/advert_tests.cpp"
@@ -716,6 +731,66 @@
       "id": "UNIT-PRIVACY-009",
       "name": "Privacy settings round trip only in companion JSON and legacy layouts remain unchanged",
       "source": "tests/unit/prefs_json_tests.cpp"
+    },
+    {
+      "id": "UNIT-MQTT-001",
+      "name": "Single MQTT worker publishes and clears its session after a publish failure",
+      "source": "tests/unit/mqtt_tests.cpp"
+    },
+    {
+      "id": "UNIT-MQTT-003",
+      "name": "Removed secondary broker settings are ignored and omitted when saving prefs",
+      "source": "tests/unit/prefs_json_tests.cpp"
+    },
+    {
+      "id": "UNIT-MQTT-005",
+      "name": "WSS tokens sign the node identity with per-host audience and bounded lifetime",
+      "source": "tests/unit/mqtt_tests.cpp"
+    },
+    {
+      "id": "UNIT-MQTT-006",
+      "name": "Native WebSocket poll exposes buffered frames and preserves errors",
+      "source": "tests/unit/websocket_poll_tests.cpp"
+    },
+    {
+      "id": "UNIT-MQTT-007",
+      "name": "Offloaded WebSocket poll counts buffered readiness and restores descriptors",
+      "source": "tests/unit/websocket_poll_tests.cpp"
+    },
+    {
+      "id": "UNIT-PINGBOT-001",
+      "name": "Pingbot matches only enabled test channel pings and preserves wire payload",
+      "source": "tests/unit/pingbot_tests.cpp"
+    },
+    {
+      "id": "UNIT-PINGBOT-002",
+      "name": "Pingbot formats hop widths zero hops and bounded truncated paths",
+      "source": "tests/unit/pingbot_tests.cpp"
+    },
+    {
+      "id": "UNIT-PINGBOT-003",
+      "name": "Pingbot adds public test key without consuming or duplicating configured channels",
+      "source": "tests/unit/pingbot_tests.cpp"
+    },
+    {
+      "id": "UNIT-PINGBOT-004",
+      "name": "Pingbot defaults off persists in both JSON roles and leaves legacy bytes unchanged",
+      "source": "tests/unit/prefs_json_tests.cpp"
+    },
+    {
+      "id": "UNIT-PINGBOT-005",
+      "name": "Pingbot addresses bounded sender names and handles unprefixed pings",
+      "source": "tests/unit/pingbot_tests.cpp"
+    },
+    {
+      "id": "UNIT-MQTT-008",
+      "name": "MQTT packet diagnostics count queue drops send success and errors without counting status",
+      "source": "tests/unit/mqtt_tests.cpp"
+    },
+    {
+      "id": "UNIT-MQTT-009",
+      "name": "MQTT full status includes signed noise floor battery voltage and uptime",
+      "source": "tests/unit/mqtt_tests.cpp"
     }
   ]
 }

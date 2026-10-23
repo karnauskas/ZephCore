@@ -24,6 +24,49 @@ slots. Explicitly clearing a packet (for example, importing a shared contact)
 now permits it to be processed again after repeated sends. The cache remains
 bounded to 160 hashes, uses capacity-only eviction, and clears on reboot.
 
+## Public #test pingbot
+
+Companions and repeaters can enable `set pingbot on` to answer `!ping` in
+public `#test`. Replies address the ping sender by name and include last-link
+RSSI/SNR, repeater hop count and
+recorded hop ID prefixes. No channel slot is needed. The setting is saved,
+defaults off, and can be disabled with `set pingbot off`.
+
+## MQTT WebSockets and identity authentication
+
+Observers and repeater uplinks publish to one broker over WebSockets at `/`,
+with port 443 as the default. Authentication uses the node identity and a fresh
+signed token whose audience is the configured hostname. SNTP time is required;
+static usernames/passwords are not used. Existing saved ports can be updated
+with `set mqtt.port 443` (or `set uplink.mqtt.port 443` on a repeater).
+
+Fixed CONNACK timeouts when the broker splits the MQTT response across small
+WebSocket frames: unread buffered frames now keep the connection readable.
+
+Observer `get mqtt.status` and repeater `get uplink.mqtt.status` now show
+packet queue/send/drop/failure totals and the last publish error, making missing
+collector traffic diagnosable without verbose packet logs. Observer output also
+includes LCD flood/direct RX and radio error counters for comparison. Send totals describe
+local QoS 0 writes, not collector acknowledgements.
+
+Fixed observer noise-floor measurements staying at the initial value by running
+radio maintenance on its deadlines. Observer status now reads the board battery
+voltage. Full online MQTT status is retained, so subscribers connecting later
+receive battery, uptime and noise-floor statistics rather than a minimal payload.
+
+## Observer display
+
+Display-equipped observers now show WiFi and MQTT connection status, received
+packet counts (total, flood and direct), receive errors, uptime, and time since
+the last parsed packet. The screen stays visible and updates once per second
+(30 seconds on e-paper); before the first packet it shows `Last: never`.
+
+## Observer startup
+
+Fixed a boot crash when applying LED preferences on observers with UI support
+compiled in. The LED preference hook no longer schedules heartbeat work before
+heartbeat initialization.
+
 ## LilyGo T-LoRa V2.1-1.6
 
 The source-only `ttgo_lora32/esp32/procpu` target now maps this revision's

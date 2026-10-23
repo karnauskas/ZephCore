@@ -45,9 +45,11 @@ bool RepeaterMesh::handleUplinkCommand(const char *command, char *reply)
 		} else if (strcmp(key, "mqtt.tls") == 0) {
 			snprintf(reply, CLI_REPLY_SIZE, "> %u", (unsigned)_uplink_creds.mqtt_tls);
 		} else if (strcmp(key, "mqtt.user") == 0) {
-			snprintf(reply, CLI_REPLY_SIZE, "> %s", _uplink_creds.mqtt_user[0] ? _uplink_creds.mqtt_user : "(not set)");
+			snprintf(reply, CLI_REPLY_SIZE, "> v1_%s", _uplink_pubkey_hex);
 		} else if (strcmp(key, "mqtt.iata") == 0) {
 			snprintf(reply, CLI_REPLY_SIZE, "> %s", _uplink_creds.mqtt_iata[0] ? _uplink_creds.mqtt_iata : "(not set)");
+		} else if (strcmp(key, "mqtt.status") == 0) {
+			mqtt_publisher_format_status(reply, CLI_REPLY_SIZE);
 		} else if (strcmp(key, "status") == 0) {
 			snprintf(reply, CLI_REPLY_SIZE, "> enabled=%s wifi=%s mqtt=%s reboot_required=%s",
 				 isUplinkEnabled() ? "yes" : "no",
@@ -94,10 +96,11 @@ bool RepeaterMesh::handleUplinkCommand(const char *command, char *reply)
 			_uplink_creds.mqtt_port = (uint16_t)port;
 		} else if (key_len == 8 && memcmp(cfg, "mqtt.tls", 8) == 0) {
 			_uplink_creds.mqtt_tls = (atoi(val) != 0) ? 1 : 0;
-		} else if (key_len == 9 && memcmp(cfg, "mqtt.user", 9) == 0) {
-			StrHelper::strncpy(_uplink_creds.mqtt_user, val, sizeof(_uplink_creds.mqtt_user));
-		} else if (key_len == 13 && memcmp(cfg, "mqtt.password", 13) == 0) {
-			StrHelper::strncpy(_uplink_creds.mqtt_password, val, sizeof(_uplink_creds.mqtt_password));
+		} else if ((key_len == 9 && memcmp(cfg, "mqtt.user", 9) == 0) ||
+			   (key_len == 13 && memcmp(cfg, "mqtt.password", 13) == 0)) {
+			strcpy(reply, "Error: MQTT authenticates with the node identity");
+			return true;
+
 		} else if (key_len == 9 && memcmp(cfg, "mqtt.iata", 9) == 0) {
 			StrHelper::strncpy(_uplink_creds.mqtt_iata, val, sizeof(_uplink_creds.mqtt_iata));
 		} else {

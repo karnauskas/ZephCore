@@ -136,6 +136,7 @@ static const struct gpio_dt_spec s_msg_led =
 #define LED_ON_MSG_MS    200   /* Pulse width when unread messages */
 
 #if HAS_ANY_HEARTBEAT_LED
+static bool s_heartbeat_initialized;
 static struct k_work_delayable s_led_on_work;
 static struct k_work_delayable s_led_off_work;
 
@@ -231,6 +232,7 @@ void ui_led_heartbeat_init(void)
 #endif
 		k_work_init_delayable(&s_led_on_work, led_on_work_handler);
 		k_work_init_delayable(&s_led_off_work, led_off_work_handler);
+		s_heartbeat_initialized = true;
 		k_work_reschedule(&s_led_on_work, K_NO_WAIT);
 		LOG_INF("LED heartbeat started");
 	}
@@ -272,6 +274,11 @@ void ui_set_heartbeat_led(bool enabled)
 void zephcore_leds_ui_sync(bool disabled)
 {
 #if HAS_ANY_HEARTBEAT_LED
+	/* Applying boot preferences must not start an uninitialized heartbeat. */
+	if (!s_heartbeat_initialized) {
+		ui_led_on_disabled_changed(disabled);
+		return;
+	}
 	if (disabled) {
 		k_work_cancel_delayable(&s_led_on_work);
 		k_work_cancel_delayable(&s_led_off_work);

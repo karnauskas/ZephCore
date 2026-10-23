@@ -1,9 +1,26 @@
 cmake_minimum_required(VERSION 3.20)
 project(zephcore_host_tests LANGUAGES C CXX)
 
+find_package(Python3 REQUIRED COMPONENTS Interpreter)
+set(WEBSOCKET_PATCH "${CMAKE_CURRENT_LIST_DIR}/../zephcore/patches/zephyr/0020-websocket-buffered-poll.patch")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${WEBSOCKET_PATCH}")
+execute_process(COMMAND ${Python3_EXECUTABLE}
+  "${CMAKE_CURRENT_LIST_DIR}/support/websocket_patch.py" "${WEBSOCKET_PATCH}"
+  "${CMAKE_CURRENT_BINARY_DIR}/websocket_poll.inc" COMMAND_ERROR_IS_FATAL ANY)
+
 option(ZEPHCORE_TEST_SANITIZERS "Enable host address/undefined behavior sanitizers" OFF)
 set(PRODUCTION "${CMAKE_CURRENT_LIST_DIR}/../zephcore")
 add_executable(zephcore_unit
+  unit/pingbot_tests.cpp
+  ${PRODUCTION}/helpers/PingBot.cpp
+  unit/websocket_poll_tests.cpp
+  support/websocket_poll_boundary.c
+  unit/observer_display_tests.cpp
+  ${PRODUCTION}/helpers/ui/observer_text.cpp
+  unit/led_lifecycle_tests.cpp
+  ${PRODUCTION}/helpers/MqttAuth.cpp
+  unit/mqtt_tests.cpp
+  support/mqtt_publisher_boundary.c
   unit/main.cpp
   unit/dedup_tests.cpp
   unit/packet_tests.cpp
@@ -51,6 +68,7 @@ target_compile_features(zephcore_unit PRIVATE cxx_std_17)
 target_compile_definitions(zephcore_unit PRIVATE CONFIG_ZEPHCORE_PACKET_LOGGING=0
   CONFIG_ZEPHCORE_UI_DESIGN_JOYSTICK=1 CONFIG_ZEPHCORE_UI_DESIGN_BUTTON=0)
 target_include_directories(zephcore_unit PRIVATE
+  ${CMAKE_CURRENT_BINARY_DIR}
   support unit ${PRODUCTION} ${PRODUCTION}/include ${PRODUCTION}/helpers ${PRODUCTION}/helpers/compat
   ${PRODUCTION}/lib/monocypher
   ${PRODUCTION}/adapters/radio
@@ -67,3 +85,9 @@ if(ZEPHCORE_TEST_SANITIZERS)
   target_compile_options(zephcore_unit PRIVATE -fsanitize=address,undefined -fno-omit-frame-pointer -fno-pie)
   target_link_options(zephcore_unit PRIVATE -fsanitize=address,undefined -no-pie)
 endif()
+
+set_source_files_properties(unit/led_lifecycle_tests.cpp PROPERTIES
+  INCLUDE_DIRECTORIES "${CMAKE_CURRENT_LIST_DIR}/support/ui")
+
+set_source_files_properties(support/mqtt_publisher_boundary.c PROPERTIES
+  INCLUDE_DIRECTORIES "${CMAKE_CURRENT_LIST_DIR}/support/mqtt")
