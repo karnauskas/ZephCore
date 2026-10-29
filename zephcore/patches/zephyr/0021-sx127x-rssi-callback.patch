@@ -1,0 +1,128 @@
+SX127x: wire the instantaneous RSSI callback into the loramac-node Radio table.
+
+sx12xx_lora_rssi() calls Radio.Rssi(), but sx127x.c leaves that callback NULL.
+The observer crash at PC=0 resolves through sx127x_get_rssi_inst(),
+hwGetRssiBurst(), triggerNoiseFloorCalibrate() and maintenanceLoop().
+Map the existing SX1272ReadRssi/SX1276ReadRssi library functions for each
+supported devicetree variant and populate Rssi. No radio-state changes.
+
+This patch is the sole owner of drivers/lora/loramac-node/sx127x.c.
+Full macro/table context supports host regression tests without a west checkout.
+
+diff --git a/drivers/lora/loramac-node/sx127x.c b/drivers/lora/loramac-node/sx127x.c
+index 409ce32efea..f285146a008 100644
+--- a/drivers/lora/loramac-node/sx127x.c
++++ b/drivers/lora/loramac-node/sx127x.c
+@@ -15,80 +15,82 @@
+ #include <zephyr/logging/log.h>
+ LOG_MODULE_REGISTER(sx127x, CONFIG_LORA_LOG_LEVEL);
+ 
+ #if DT_HAS_COMPAT_STATUS_OKAY(semtech_sx1272)
+ 
+ #include <sx1272/sx1272.h>
+ 
+ #define DT_DRV_COMPAT semtech_sx1272
+ 
+ #define SX127xCheckRfFrequency SX1272CheckRfFrequency
+ #define SX127xGetBoardTcxoWakeupTime SX1272GetBoardTcxoWakeupTime
+ #define SX127xSetAntSwLowPower SX1272SetAntSwLowPower
+ #define SX127xSetBoardTcxo SX1272SetBoardTcxo
+ #define SX127xSetAntSw SX1272SetAntSw
+ #define SX127xReset SX1272Reset
+ #define SX127xIoIrqInit SX1272IoIrqInit
+ #define SX127xWriteBuffer SX1272WriteBuffer
+ #define SX127xReadBuffer SX1272ReadBuffer
+ #define SX127xSetRfTxPower SX1272SetRfTxPower
+ #define SX127xGetDio1PinState SX1272GetDio1PinState
+ #define SX127xInit SX1272Init
+ #define SX127xGetStatus SX1272GetStatus
+ #define SX127xSetModem SX1272SetModem
+ #define SX127xSetChannel SX1272SetChannel
+ #define SX127xIsChannelFree SX1272IsChannelFree
+ #define SX127xRandom SX1272Random
+ #define SX127xSetRxConfig SX1272SetRxConfig
+ #define SX127xSetTxConfig SX1272SetTxConfig
+ #define SX127xGetTimeOnAir SX1272GetTimeOnAir
+ #define SX127xSend SX1272Send
+ #define SX127xSetSleep SX1272SetSleep
+ #define SX127xSetStby SX1272SetStby
+ #define SX127xSetRx SX1272SetRx
+ #define SX127xWrite SX1272Write
+ #define SX127xRead SX1272Read
++#define SX127xReadRssi SX1272ReadRssi
+ #define SX127xSetMaxPayloadLength SX1272SetMaxPayloadLength
+ #define SX127xSetPublicNetwork SX1272SetPublicNetwork
+ #define SX127xGetWakeupTime SX1272GetWakeupTime
+ #define SX127xSetTxContinuousWave SX1272SetTxContinuousWave
+ 
+ #elif DT_HAS_COMPAT_STATUS_OKAY(semtech_sx1276)
+ 
+ #include <sx1276/sx1276.h>
+ 
+ #define DT_DRV_COMPAT semtech_sx1276
+ 
+ #define SX127xCheckRfFrequency SX1276CheckRfFrequency
+ #define SX127xGetBoardTcxoWakeupTime SX1276GetBoardTcxoWakeupTime
+ #define SX127xSetAntSwLowPower SX1276SetAntSwLowPower
+ #define SX127xSetBoardTcxo SX1276SetBoardTcxo
+ #define SX127xSetAntSw SX1276SetAntSw
+ #define SX127xReset SX1276Reset
+ #define SX127xIoIrqInit SX1276IoIrqInit
+ #define SX127xWriteBuffer SX1276WriteBuffer
+ #define SX127xReadBuffer SX1276ReadBuffer
+ #define SX127xSetRfTxPower SX1276SetRfTxPower
+ #define SX127xGetDio1PinState SX1276GetDio1PinState
+ #define SX127xInit SX1276Init
+ #define SX127xGetStatus SX1276GetStatus
+ #define SX127xSetModem SX1276SetModem
+ #define SX127xSetChannel SX1276SetChannel
+ #define SX127xIsChannelFree SX1276IsChannelFree
+ #define SX127xRandom SX1276Random
+ #define SX127xSetRxConfig SX1276SetRxConfig
+ #define SX127xSetTxConfig SX1276SetTxConfig
+ #define SX127xGetTimeOnAir SX1276GetTimeOnAir
+ #define SX127xSend SX1276Send
+ #define SX127xSetSleep SX1276SetSleep
+ #define SX127xSetStby SX1276SetStby
+ #define SX127xSetRx SX1276SetRx
+ #define SX127xWrite SX1276Write
+ #define SX127xRead SX1276Read
++#define SX127xReadRssi SX1276ReadRssi
+ #define SX127xSetMaxPayloadLength SX1276SetMaxPayloadLength
+ #define SX127xSetPublicNetwork SX1276SetPublicNetwork
+ #define SX127xGetWakeupTime SX1276GetWakeupTime
+ #define SX127xSetTxContinuousWave SX1276SetTxContinuousWave
+ 
+ #else
+ #error No SX127x instance in device tree.
+ #endif
+@@ -524,28 +526,29 @@ uint32_t SX127xGetDio1PinState(void)
+ /* Initialize Radio driver callbacks */
+ const struct Radio_s Radio = {
+ 	.Init = SX127xInit,
+ 	.GetStatus = SX127xGetStatus,
+ 	.SetModem = SX127xSetModem,
+ 	.SetChannel = SX127xSetChannel,
+ 	.IsChannelFree = SX127xIsChannelFree,
+ 	.Random = SX127xRandom,
+ 	.SetRxConfig = SX127xSetRxConfig,
+ 	.SetTxConfig = SX127xSetTxConfig,
+ 	.CheckRfFrequency = SX127xCheckRfFrequency,
+ 	.TimeOnAir = SX127xGetTimeOnAir,
+ 	.Send = SX127xSend,
+ 	.Sleep = SX127xSetSleep,
+ 	.Standby = SX127xSetStby,
+ 	.Rx = SX127xSetRx,
++	.Rssi = SX127xReadRssi,
+ 	.Write = SX127xWrite,
+ 	.Read = SX127xRead,
+ 	.WriteBuffer = SX127xWriteBuffer,
+ 	.ReadBuffer = SX127xReadBuffer,
+ 	.SetMaxPayloadLength = SX127xSetMaxPayloadLength,
+ 	.SetPublicNetwork = SX127xSetPublicNetwork,
+ 	.GetWakeupTime = SX127xGetWakeupTime,
+ 	.IrqProcess = NULL,
+ 	.RxBoosted = NULL,
+ 	.SetRxDutyCycle = NULL,
+ 	.SetTxContinuousWave = SX127xSetTxContinuousWave,
+ };

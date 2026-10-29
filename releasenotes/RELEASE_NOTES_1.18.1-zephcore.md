@@ -1,5 +1,18 @@
 # ZephCore 1.18.1-zephcore
 
+## ProMicro USB flashing
+
+ProMicro SX1262 now defaults to UF2 for `west flash`. Enter the bootloader and
+mount its UF2 drive before flashing. Existing build directories need a pristine
+rebuild to pick up the runner configuration.
+
+## Repeater scope bypass
+
+`set repeat.all on` lets repeaters forward unknown, denied and unscoped floods
+without configuring regions. Defaults to off and persists across reboot. General
+and advert hop limits, duplicate suppression and loop protection still apply.
+Use `set repeat.all off` to restore scope filtering.
+
 ## Companion location privacy
 
 USB Serial and authenticated BLE CLI can configure four local privacy zones,
@@ -56,6 +69,9 @@ receive battery, uptime and noise-floor statistics rather than a minimal payload
 
 ## Observer display
 
+The observer LCD also shows noise floor, last received RSSI (dBm), and SNR
+(dB). Readings not yet available show `--`; all existing counters remain.
+
 Display-equipped observers now show WiFi and MQTT connection status, received
 packet counts (total, flood and direct), receive errors, uptime, and time since
 the last parsed packet. The screen stays visible and updates once per second
@@ -106,3 +122,28 @@ driver-rejected modem settings permit one startup rollback attempt. Identity
 and unrelated preferences are retained. Existing SX126x software recovery stays
 in place; there is no hardware watchdog. Hardware fault-injection validation
 remains outstanding; see `docs/MILESTONE_1_RECOVERY.md` for scope and acceptance.
+
+## Recovery and voltage observations
+
+New opt-in CLI flags `immune`, `winter` and `winter.auto` persist in prefs.json.
+Immune status counts existing CAD/AGC remedies and distinguishes local RX
+restoration from later receiver activity. Winter status reports raw voltage
+summaries held in RAM; `winter reset` clears them. These are observation tools:
+seasonal prediction, learned recovery selection and automatic advert suppression
+are not implemented. `winter.auto` explicitly reports action unsupported.
+
+Observer MQTT status now uses accumulated dispatcher airtime instead of
+hardcoded zeros. A listen-only observer still reports zero TX airtime. RX
+airtime is estimated packet airtime, not channel occupancy or receiver-on time.
+Per-packet RSSI/SNR and driver RX errors retain their existing reporting.
+
+## SX127x noise floor
+
+Fixed a startup crash during noise-floor sampling: the loramac-node SX127x
+driver now supplies its missing RSSI callback for both SX1272 and SX1276 variants.
+
+SX127x boards now feed the common noise-floor estimator from instantaneous
+RSSI through Zephyr's LoRa API, replacing the fixed −80 dBm placeholder.
+This applies to every role using the shared radio adapter. Failed API queries
+are discarded by the existing burst sampler. Hardware RF accuracy has not been
+verified; a busy channel can influence the estimate.

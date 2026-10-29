@@ -62,6 +62,8 @@ extern "C" {
 uint8_t power_budget_factor(void);
 uint32_t power_budget_scale(uint32_t base);
 uint32_t power_budget_sensor_age_ms(void);
+void winter_observation_status(char *reply, unsigned size);
+void winter_observation_reset(void);
 #ifdef __cplusplus
 }
 #endif

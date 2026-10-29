@@ -1150,6 +1150,9 @@ void LoRaRadio::agcIdleMaintenance(uint32_t now)
 		/* hwResetAgc() leaves the chip out of RX by contract, so this is
 		 * a genuine re-entry and re-arms the duty cycle if one is set. */
 		startReceive();
+		if (_prefs && _prefs->immune) {
+			_immune.record(true, rx_total, atomic_get(&_in_recv_mode));
+		}
 		_agc_last_activity_ms = now ? now : 1;
 	}
 }
@@ -1229,6 +1232,10 @@ void LoRaRadio::recoverRxState()
 	atomic_set(&_in_recv_mode, 0);
 	_config_cached = false;
 	startReceive();
+	if (_prefs && _prefs->immune) {
+		_immune.record(false, getPacketsRecv() + getPacketsRecvErrors(),
+			atomic_get(&_in_recv_mode));
+	}
 }
 
 bool LoRaRadio::isChannelActive(int threshold)
@@ -1551,3 +1558,12 @@ bool LoRaRadio::configSideDetectors(const uint8_t *sfs, uint8_t num)
 }
 
 } /* namespace mesh */
+
+void mesh::LoRaRadio::formatImmuneStatus(char *reply, size_t size) const
+{
+	snprintf(reply, size, "%s state=%s cad=%u agc=%u outcome=%s",
+		_prefs && _prefs->immune ? "on" : "off",
+		_prefs && _prefs->immune ? "observe" : "off",
+		(unsigned)_immune.cad, (unsigned)_immune.agc,
+		_immune.outcome(getPacketsRecv() + getPacketsRecvErrors()));
+}

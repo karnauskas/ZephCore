@@ -1,3 +1,4 @@
+#include <helpers/FeatureObservation.h>
 #include <helpers/PowerBudget.h>
 /*
  * SPDX-License-Identifier: MIT
@@ -117,8 +118,8 @@ void ObserverMesh::buildStatusJson(const char *status, char *out, size_t out_siz
 		0u,                                              /* debug_flags */
 		0u,                                              /* queue_len */
 		((LoRaRadio *)_radio)->getNoiseFloor(),
-		0u,                                              /* tx_air_secs */
-		0u,                                              /* rx_air_secs */
+		getTotalAirTime() / 1000,                         /* tx_air_secs */
+		getReceiveAirTime() / 1000,                       /* rx_air_secs */
 		((LoRaRadio *)_radio)->getPacketsRecvErrors(),
 		false,                                           /* repeat: observer never forwards */
 	};
@@ -297,11 +298,23 @@ bool ObserverMesh::handleCLI(const char *command, char *reply, int reply_size)
 		return true;  /* caller prints the banner */
 	}
 
+	if (strcmp(command, "winter reset") == 0) {
+		winter_observation_reset();
+		snprintf(reply, reply_size, "OK (RAM history cleared)");
+		return false;
+	}
+
 	/* ---- get commands ---- */
 	if (memcmp(command, "get ", 4) == 0) {
 		const char *key = command + 4;
 
-		if (strcmp(key, "power.budget") == 0) {
+		if (strcmp(key, "immune") == 0 || strcmp(key, "immune.status") == 0) {
+			static_cast<LoRaRadio *>(_radio)->formatImmuneStatus(reply, reply_size);
+		} else if (strcmp(key, "winter") == 0 || strcmp(key, "winter.status") == 0) {
+			winter_observation_status(reply, reply_size);
+		} else if (strcmp(key, "winter.auto") == 0) {
+			snprintf(reply, reply_size, "%s action=unsupported", _prefs.winter_auto ? "on" : "off");
+		} else if (strcmp(key, "power.budget") == 0) {
 			snprintf(reply, reply_size, "%s factor=%u", _prefs.adaptive_power ? "on" : "off", power_budget_factor());
 
 		} else if (strcmp(key, "role") == 0) {
@@ -396,12 +409,26 @@ bool ObserverMesh::handleCLI(const char *command, char *reply, int reply_size)
 		/* Helper: find value after "key " */
 		auto find_val = [](const char *s, const char *prefix) -> const char * {
 			size_t n = strlen(prefix);
-			if (memcmp(s, prefix, n) == 0 && s[n] == ' ')
+			if (strncmp(s, prefix, n) == 0 && s[n] == ' ')
 				return s + n + 1;
 			return nullptr;
 		};
 
 		const char *val;
+
+		const char *feature_keys[] = {"immune", "winter", "winter.auto"};
+		for (const char *key : feature_keys) {
+			if ((val = find_val(rest, key)) != nullptr) {
+				int value = observationValue(val);
+				if (value < 0) snprintf(reply, reply_size, "Error: must be on, off or default");
+				else {
+					*observationFlag(_prefs, key) = uint8_t(value);
+					bool saved = _store->savePrefs(_prefs);
+					snprintf(reply, reply_size, "%s", saved ? "OK (observation only)" : "Error: applied in RAM; save failed");
+				}
+				return false;
+			}
+		}
 
 		if ((val = find_val(rest, "power.budget")) != nullptr) {
 			if (strcmp(val, "on") == 0 || strcmp(val, "off") == 0 || strcmp(val, "default") == 0) {

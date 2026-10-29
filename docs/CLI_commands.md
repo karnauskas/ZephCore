@@ -134,6 +134,40 @@ Regions control which flood packets the repeater forwards. The region tree is hi
 
 ---
 
+## Observation features (ZephCore only)
+
+Available through the common CLI on companion, repeater and room server, and
+through the observer's own USB CLI. Companion access remains local; repeater
+and room-server remote access uses the existing admin permissions. KISS has no
+settings CLI for these features. All three flags default off and persist only
+in `prefs.json`. Changes apply without reboot. A save failure reports that the
+change applied in RAM but was not saved.
+
+| Command | Behaviour |
+|---|---|
+| `set immune <on\|off\|default>` | Collect counts of existing CAD-gate and AGC recovery attempts; default is off |
+| `get immune` / `get immune.status` | Flag, observation state, CAD/AGC attempt counts and latest outcome |
+| `set winter <on\|off\|default>` | Collect raw voltage summaries on existing wakes, at most once per 30 seconds; default is off |
+| `get winter` / `get winter.status` | Flag, auto permission, observation state, sample count, first/last/min/max mV, USB indication and RAM history lifetime |
+| `set winter.auto <on\|off\|default>` | Store permission for future automatic conservation; current implementation remains observation-only |
+| `get winter.auto` | Stored permission and `action=unsupported` |
+| `winter reset` | Clear RAM voltage observations without changing flags or other preferences |
+
+History resets on reboot and is retained when flags are disabled. `immune off`
+stops recording new attempts; existing recovery remains active. Outcomes
+separate failed local restoration, restored local RX state and subsequent
+receiver activity; activity does not prove that the remedy caused recovery.
+`clear stats` does not create false receiver activity in these observations.
+
+Winter Memory currently infers neither battery presence nor charging from
+voltage. USB is `unknown` without a detection capability. Its auto flag does
+not suppress transmissions. The separate `power.budget` policy retains its
+existing behaviour. Seasonal summaries, coverage and forecasts remain proposed
+in [Winter Memory](WINTER_MEMORY.md); additional recovery policy remains
+proposed in [Digital Immune System](DIGITAL_IMMUNE_SYSTEM.md).
+
+---
+
 ## Statistics & Logging
 
 | Command | Description |
@@ -647,3 +681,13 @@ does not confirm broker acceptance or collector processing. The observer also ap
 same counters as the LCD. Read twice while receiving LoRa traffic to see which
 stage advances. These concurrent counters
 are individually atomic and may change while the status is being formatted.
+
+### Repeat all scopes (repeater only)
+
+`set repeat.all on` forwards floods regardless of scope: unknown transport codes,
+region deny flags (including wildcard `*`), and `flood.max.unscoped` are ignored.
+`get repeat.all` reports the setting; `set repeat.all off` (or `default`) restores
+normal filtering. Default: off. Saved in `prefs.json` as `zc.repeat_all`.
+Changes apply immediately without changing the region table or packet scope.
+`repeat off`, `flood.max`, `flood.max.advert`, duplicate suppression, loop detection
+and normal direct routing still apply. Room servers remain non-forwarding.

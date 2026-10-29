@@ -16,6 +16,7 @@
 #include <helpers/MeshTimeSync.h>
 #include <helpers/OffgridPolicy.h>
 #include <helpers/LoopWakeStats.h>
+#include <helpers/FeatureObservation.h>
 extern "C" void power_diag_line(int n, char *out, size_t cap);  /* TEMPORARY: helpers/power_diag.c */
 #include <helpers/time_sync.h>
 #include <helpers/TxtDataHelpers.h>
@@ -476,6 +477,9 @@ void CommonCLI::handleCommand(uint32_t sender_timestamp, const char* command, ch
 		StrHelper::strzcpy(_prefs->password, &command[9], sizeof(_prefs->password));
 		savePrefs();
 		snprintf(reply, CLI_REPLY_SIZE, "password now: %s", _prefs->password);
+	} else if (strcmp(command, "winter reset") == 0) {
+		winter_observation_reset();
+		strcpy(reply, "OK (RAM history cleared)");
 	} else if (memcmp(command, "clear stats", 11) == 0) {
 		_callbacks->clearStats();
 		strcpy(reply, "(OK - stats reset)");
@@ -981,6 +985,19 @@ bool CommonCLI::handleRadioCmd(uint32_t sender_timestamp, const char* command, c
 
 void CommonCLI::handleGetCmd(uint32_t sender_timestamp, const char* command, char* reply) {
 	const char* config = &command[4];
+	if (strcmp(config, "immune") == 0 || strcmp(config, "immune.status") == 0) {
+		_callbacks->formatImmuneStatus(reply, replyCap(sender_timestamp));
+		return;
+	}
+	if (strcmp(config, "winter") == 0 || strcmp(config, "winter.status") == 0) {
+		winter_observation_status(reply, replyCap(sender_timestamp));
+		return;
+	}
+	if (strcmp(config, "winter.auto") == 0) {
+		snprintf(reply, replyCap(sender_timestamp), "%s action=unsupported", _prefs->winter_auto ? "on" : "off");
+		return;
+	}
+
 	if (strcmp(config, "pm") == 0) {
 		if (zc_pm_format_stats(reply, CLI_REPLY_SIZE) == 0) {
 			strcpy(reply, "Error: no light sleep on this build");
@@ -1013,6 +1030,10 @@ void CommonCLI::handleGetCmd(uint32_t sender_timestamp, const char* command, cha
 	 * stays for the legacy on-disk layout. */
 	} else if (memcmp(config, "allow.read.only", 15) == 0) {
 		snprintf(reply, CLI_REPLY_SIZE, "> %s", _prefs->allow_read_only ? "on" : "off");
+#endif
+#ifdef CONFIG_ZEPHCORE_ROLE_REPEATER
+	} else if (strcmp(config, "repeat.all") == 0) {
+		snprintf(reply, CLI_REPLY_SIZE, "> %s", _prefs->repeat_all ? "on" : "off");
 #endif
 #if defined(CONFIG_ZEPHCORE_ROLE_REPEATER) || defined(CONFIG_ZEPHCORE_ROLE_ROOM_SERVER)
 	// ZEPHCORE: only these roles originate periodic adverts.
@@ -1258,6 +1279,23 @@ void CommonCLI::handleGetCmd(uint32_t sender_timestamp, const char* command, cha
 
 void CommonCLI::handleSetCmd(uint32_t sender_timestamp, const char* command, char* reply) {
 	const char* config = &command[4];
+	const char *space = strchr(config, ' ');
+	if (space && size_t(space - config) < 16) {
+		char key[16];
+		memcpy(key, config, space - config);
+		key[space - config] = 0;
+		if (uint8_t *flag = observationFlag(*_prefs, key)) {
+			int value = observationValue(space + 1);
+			if (value < 0) strcpy(reply, "Error: must be on, off or default");
+			else {
+				*flag = uint8_t(value);
+				bool saved = _callbacks->savePrefs();
+				strcpy(reply, saved ? "OK (observation only)" : "Error: applied in RAM; save failed");
+			}
+			return;
+		}
+	}
+
 	if (memcmp(config, "leds.radio ", 11) == 0) {
 		/* What the LoRa activity LED reacts to. Below the master switch:
 		 * "set leds off" keeps it dark whatever this says. */
@@ -1439,6 +1477,17 @@ void CommonCLI::handleSetCmd(uint32_t sender_timestamp, const char* command, cha
 			strcpy(reply, "OK");
 		} else {
 			strcpy(reply, "Error: must be on, off or default");
+		}
+#endif
+#ifdef CONFIG_ZEPHCORE_ROLE_REPEATER
+	} else if (memcmp(config, "repeat.all ", 11) == 0) {
+		int on = cliOnOff(&config[11], cliDefaults()->repeat_all);
+		if (on < 0) {
+			strcpy(reply, "Error: must be on, off or default");
+		} else {
+			_prefs->repeat_all = (uint8_t)on;
+			savePrefs();
+			strcpy(reply, "OK");
 		}
 #endif
 #if defined(CONFIG_ZEPHCORE_ROLE_REPEATER) || defined(CONFIG_ZEPHCORE_ROLE_ROOM_SERVER)

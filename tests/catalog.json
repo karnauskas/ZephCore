@@ -368,6 +368,16 @@
       "source": "tests/unit/policy_tests.cpp"
     },
     {
+      "id": "UNIT-POLICY-004",
+      "name": "Repeat all bypasses unscoped ceiling but retains general and advert limits",
+      "source": "tests/unit/policy_tests.cpp"
+    },
+    {
+      "id": "UNIT-PJSON-011",
+      "name": "Repeat all is opt-in and persists in server JSON only",
+      "source": "tests/unit/prefs_json_tests.cpp"
+    },
+    {
       "id": "UNIT-POLICY-003",
       "name": "Transport flood with code 0 is un-scoped, other codes and routes are not",
       "source": "tests/unit/policy_tests.cpp"
@@ -791,6 +801,46 @@
       "id": "UNIT-MQTT-009",
       "name": "MQTT full status includes signed noise floor battery voltage and uptime",
       "source": "tests/unit/mqtt_tests.cpp"
+    },
+    {
+      "id": "UNIT-OBSERVE-001",
+      "name": "Observation flags require exact keys and boolean values",
+      "source": "tests/unit/power_budget_tests.cpp"
+    },
+    {
+      "id": "UNIT-OBSERVE-002",
+      "name": "Voltage observations exclude invalid readings and retain bounded raw summaries",
+      "source": "tests/unit/power_budget_tests.cpp"
+    },
+    {
+      "id": "UNIT-OBSERVE-003",
+      "name": "Recovery observations distinguish failed local restoration and subsequent receiver activity",
+      "source": "tests/unit/power_budget_tests.cpp"
+    },
+    {
+      "id": "UNIT-OBSERVE-004",
+      "name": "Observation flags persist in both JSON layouts and leave legacy bytes frozen",
+      "source": "tests/unit/prefs_json_tests.cpp"
+    },
+    {
+      "id": "UNIT-OBSERVE-005",
+      "name": "Winter observation samples existing wakes once per cadence and never changes the reserve factor",
+      "source": "tests/unit/power_budget_tests.cpp"
+    },
+    {
+      "id": "UNIT-SX127X-001",
+      "name": "SX127x adapter reads instantaneous RSSI and rejects failed queries",
+      "source": "tests/unit/sx127x_rssi_tests.cpp"
+    },
+    {
+      "id": "UNIT-SX127X-002",
+      "name": "SX1272 and SX1276 Radio tables dispatch RSSI to the matching library callback",
+      "source": "tests/unit/sx127x_table_tests.cpp"
+    },
+    {
+      "id": "UNIT-OBSERVER-003",
+      "name": "Observer LCD shows noise floor RSSI and quarter-dB SNR with unknown startup readings",
+      "source": "tests/unit/observer_display_tests.cpp"
     }
   ]
 }

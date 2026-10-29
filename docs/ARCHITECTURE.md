@@ -388,7 +388,7 @@ mesh::Radio (abstract interface)
         uses kLoRaRadioOps, the family's const table of driver extension
         functions (LoRaRadioOps.h), one linked per build:
           radio_ops_sx126x.cpp → Zephyr native SX126x driver + sx126x_ext.h
-          radio_ops_sx127x.cpp → Zephyr loramac-node backend (all entries NULL)
+          radio_ops_sx127x.cpp → Zephyr loramac-node backend + lora_rssi()
           radio_ops_lr1110.cpp → our lr11xx_lora.c driver + lr11xx_lora.h
           radio_ops_lr2021.cpp → our lr20xx_lora.c driver + lr20xx_lora.h
 ```
@@ -517,7 +517,31 @@ The custom `lr11xx_lora.c` driver handles several LR1110 firmware bugs:
 
 ### 5.5 SX127x and LR2021 Paths
 
-- **SX127x** (`CONFIG_ZEPHCORE_RADIO_SX127X`): uses Zephyr's loramac-node LoRa backend instead of the native driver (`CONFIG_LORA_MODULE_BACKEND_LORAMAC_NODE`). Patch `0004-lora-sx127x-62k5-bandwidth` adds the 62.5 kHz bandwidth MeshCore defaults to. No RX duty cycle and no RX gain boost on this path. Reference board: TTGO LoRa32 (SX1276).
+The missing driver callback was confirmed by the TTGO observer ELF: the PC=0
+exception originated in `sx12xx_lora_rssi()` at `Radio.Rssi()`. The callback-table
+fix adds no flash or static RAM to the matched observer build. Host regression
+fails on the unpatched table; hardware execution has not been verified.
+
+The SX127x RSSI integration fixes a missing adapter hook: Zephyr's
+`sx12xx_lora_rssi()` already calls `Radio.Rssi()`, but the SX127x ops table
+left `rssi_inst` unset and therefore selected the −80 dBm fallback. No
+radio restart is needed. Patch `0021-sx127x-rssi-callback` also wires
+`Radio.Rssi` to `SX1272ReadRssi`/`SX1276ReadRssi`: without that driver callback,
+`lora_rssi()` reaches a null function pointer when maintenance first samples RSSI.
+The shared sampler's existing RX/TX guards,
+median and estimator remain in use; this also supplies the existing
+RSSI-threshold channel check.
+
+Verification (2026-10-26): quick host profile passes 175 cases, including
+production SX127x adapter queries, API-error rejection and both driver RSSI table mappings. T-LoRa V2.1-1.6
+builds pass for companion, repeater, room server, observer and KISS; ProMicro
+SX1262 repeater builds as the unaffected radio-family control. The matched
+T-LoRa observer grows by 32 B flash with no RAM delta against the preceding
+working-tree build. No hardware execution or RF accuracy verification was
+performed.
+
+
+- **SX127x** (`CONFIG_ZEPHCORE_RADIO_SX127X`): uses Zephyr's loramac-node LoRa backend instead of the native driver (`CONFIG_LORA_MODULE_BACKEND_LORAMAC_NODE`). Patch `0004-lora-sx127x-62k5-bandwidth` adds the 62.5 kHz bandwidth MeshCore defaults to. Instantaneous RSSI is exposed through `lora_rssi()` to the common noise-floor sampler; API failures use its -128 refused-read sentinel rather than a fabricated floor. The backend reads the live RSSI register with the library's HF/LF offset during RX, without stopping reception. It supplies no hardware RX-busy gate through this adapter, so rejection of signal-contaminated samples relies on the common RSSI threshold and estimator. No RX duty cycle and no RX gain boost on this path. Reference board: TTGO LoRa32 (SX1276).
 - **LR2021** (`CONFIG_ZEPHCORE_RADIO_LR2021`): custom driver in `patches/zephyr-new/drivers/lora/lr20xx/` (copied into the Zephyr tree at configure time, like LR11xx). **Validated on the SenseCAP MeshTracker X1** — RX, TX, LBT and RX duty cycle all confirmed on hardware after a full driver audit (2026-08-12). `promicro_lr2021` builds but is untested; its module was destroyed by overvoltage during bring-up. Notable properties that differ from the SX126x/LR11xx paths:
   - **Firmware Patch RAM.** DS §22.3 calls the PRAM "highly recommended"; without it the chip runs unpatched. `lr20xx_load_pram()` writes the 560-word image from `0x801000`, activates it with opcode `0x012D`, and verifies the magic word at `0x800FF8` — so the `PRAM loaded:` log line is proof the chip took it, not merely that the writes were accepted. Volatile: reloaded from both reset paths, survives every sleep this driver issues (all with retention).
   - **Hardware CAD→TX (`CadExitMode = 0x10`).** The chip runs the LBT CAD and, on a clear channel, transmits itself with no host round-trip. Payload and packet params are staged *before* `SetLoraCAD` and DIO1 stays enabled across it. Bounded by `cad_timeout`, which is 24 bits of 32 MHz periods = **524 ms max Tx timeout** — transmits whose airtime exceeds that take the classic CAD→host→`SetTx` route rather than being truncated (at SF7/BW62.5 the crossover is ~96 bytes).
@@ -779,6 +803,17 @@ default) is migrated to 3200 once (`zc.aoff_set`).
 
 ### 6.2.1 Adaptive power budget
 
+Proposed history-based extension: [Winter Memory](WINTER_MEMORY.md).
+Automatic seasonal control remains proposed; the runtime policy below remains
+reserve-based. `immune`, `winter` and `winter.auto` are JSON-only CLI flags,
+default off. `FeatureObservation.h` holds fixed-size raw voltage summaries and
+counts of existing radio CAD/AGC remedies. `PowerBudget.cpp` samples voltage
+on existing wakes at most every 30 seconds when either budget or Winter Memory
+is enabled; flags off add no sensor acquisition. History is RAM-only. No
+charging inference, seasonal prediction, additional recovery action or advert
+suppression is enabled by these flags. `winter.auto` reports action unsupported.
+See [CLI controls](CLI_commands.md#observation-features-zephcore-only).
+
 `helpers/PowerBudget.{h,cpp}` is a shared, main-thread policy bound to each
 composition root's board and live preferences. `set power.budget on|off|default`
 (default off, JSON-only `zc.power_budget`) enables it on companions and servers;
@@ -821,6 +856,7 @@ Autonomous operation features:
 - **Authentication**: Password-based login with timestamp replay protection (120s window)
 - **Permission levels**: GUEST(0), READ_ONLY(1), READ_WRITE(2), ADMIN(3)
 - **Region filtering**: `RegionMap` with transport key matching per flood packet. Un-scoped floods (`mesh::isUnscopedFlood()`: plain floods, and transport floods with code 0 as upstream 1.18.0) go to the wildcard `*`, whose deny-flood flag and `flood.max.unscoped` apply to both; upstream exempts the code-0 case from both (LLD 02 section 16)
+- **Scope bypass**: repeater-only `set repeat.all on` (default off, JSON-only `zc.repeat_all`) ignores region/wildcard deny flags, unknown scopes and the unscoped-specific hop ceiling while forwarding. General/advert hop ceilings, forwarding disable, duplicate suppression, loop detection and direct routing still apply; received scope metadata and outgoing packet scopes are preserved. Room servers never forward.
 - **Rate limiting**: 4 requests per 120s (discovery), 4 per 180s (anonymous), 4 failed logins per 180s
 - **Node discovery**: answers discovery requests only while forwarding is on. With `advert.interval` and `flood.advert.interval` both `0` the node is hidden and does not answer, as upstream (`isHiddenNode()`); the request still counts against the discovery rate limit
 - **Adaptive periodic adverts**: repeater and room server opt in with `set advert.adaptive on` (default off, `zc.adaptive_adv` in `prefs.json` only). Shared `helpers/AdaptiveAdvert.h` selects 2× the configured local/flood interval when no verified non-share advert has been heard for 15 minutes (including startup), or the contention estimate is ≥4; otherwise ½× for 10 minutes after a new identity, then 1×. Congestion takes priority. Decisions occur when timers are scheduled; a new identity can also advance a pending timer, never a due or disabled one. A 16-entry FIFO of full public keys uses 528 bytes per server role on 32-bit targets; an evicted identity counts as new when heard again. Quiet means absence of adverts, not absence of all radio traffic. No new periodic wakeups, packet format changes, or heap allocations; manual adverts and companion/observer behavior remain unchanged. See [ADR 0010](adr/0010-adaptive-advertisements.md).
@@ -835,6 +871,13 @@ Headless store-and-forward shared message room (BBS). Clients log in with the ad
 ### 6.5 ObserverMesh
 
 Listen-only node (ESP32 only): receives LoRa packets and publishes them to an MQTT broker over WiFi STA (`adapters/mqtt/`, `adapters/wifi/`). Never transmits. Configured at runtime via serial CLI (credentials in `observer_creds.cpp`); build with `boards/common/observer.conf`.
+
+MQTT status uses dispatcher TX/RX packet airtime counters in seconds and driver
+RX errors. The listen-only role has zero TX airtime; RX airtime is an estimated
+packet-duration sum, not receiver-on time or channel occupancy. RSSI and SNR
+are carried by packet messages. Noise-floor sampling depends on the radio
+adapter: native SX126x supplies samples through its extension API, and SX127x
+uses `lora_rssi()` for the same shared sampler.
 
 Observers with `CONFIG_ZEPHCORE_UI_DISPLAY` use `helpers/ui/observer_display.*`
 and `observer_text.cpp` for a status screen: WiFi ready (DHCP/SNTP completed),
@@ -1051,6 +1094,8 @@ driver. Persisted in `prefs.json` as `zc.leds_brightness`; it is not part of the
   The existing `mqtt.*` / `uplink.mqtt.*` host, port and TLS commands and frozen `obs_creds`
   layout remain; static username/password fields are unused. There is no secondary broker
   configuration or session. The observer screen shows MQTT up/down.
+  Its first row shows noise floor and last received RSSI in dBm; the error row also shows
+  last received SNR with quarter-dB precision. Unknown startup readings show `--`.
   Full online status (including battery mV, uptime seconds and signed noise floor dBm in `stats`)
   is retained; the worker does not overwrite it with a minimal online payload. Observer voltage
   comes from `MainBoard`, and its main-thread event wait follows radio maintenance deadlines so
@@ -1196,7 +1241,7 @@ prj.conf (base: console; production defaults — LOG=n, ASSERT=n)
 
 ### 9.3 Platform Notes
 
-- **nRF52840**: Zephyr open-source BLE controller, UF2 bootloader, partial flash erase for BLE coexistence
+- **nRF52840**: Zephyr open-source BLE controller, UF2 bootloader, partial flash erase for BLE coexistence. ProMicro SX1262 defaults to the UF2 flash runner; `west flash` requires its bootloader drive to be mounted.
 - **nRF54L15**: Same BLE controller as nRF52, CMSIS-DAP via SAMD11 bridge, no native USB
 - **nRF54LM20A** (the LR2021 EVK with a XIAO nRF54LM20A, its own board directory): built and flashed like the nRF54L15 (`--no-sysbuild`, CMSIS-DAP); source-only, no published firmware
 - **ESP32-C3/C6/S3**: Espressif proprietary BLE blob, 32KB heap, asserts disabled (blob IRQ false positives); simple-boot by default, MCUboot only with `--sysbuild` (WiFi OTA)

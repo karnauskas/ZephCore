@@ -75,6 +75,9 @@ protected:
 		def("radio_good", _recovery);
 		def("pingbot", _p->pingbot);
 		def("power_budget", _p->adaptive_power);
+		def("immune", _p->immune);
+		def("winter", _p->winter);
+		def("winter_auto", _p->winter_auto);
 		def("leds_off", _p->leds_disabled);
 		def("leds_radio", _p->leds_radio_mode);
 		def("leds_hb", _p->leds_hb_mode);
@@ -290,6 +293,7 @@ protected:
 		def("tz_offset", _p->tz_offset);
 		def("backoff", _p->backoff_multiplier);
 		def("adaptive_adv", _p->adaptive_advert);
+		def("repeat_all", _p->repeat_all);
 		def("disc_ts", _p->discovery_mod_timestamp);
 		def("gps_set", _p->gps_enabled_set);
 	}
