@@ -6,6 +6,7 @@
 #pragma once
 
 #include <zephyr/kernel.h>
+#include <stdio.h>
 #include <mesh/Mesh.h>
 #include <mesh/MeshCore.h>
 #include <helpers/IdentityStore.h>
@@ -32,7 +33,10 @@ class MeshTimeSync;
 
 class CommonCLICallbacks {
 public:
-	virtual void savePrefs() = 0;
+	virtual bool savePrefs() = 0;
+	virtual void formatImmuneStatus(char *reply, size_t size) {
+		snprintf(reply, size, "unsupported");
+	}
 	virtual const char* getFirmwareVer() = 0;
 	virtual const char* getBuildDate() = 0;
 	virtual const char* getRole() = 0;

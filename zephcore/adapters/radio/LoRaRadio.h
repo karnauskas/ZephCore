@@ -15,6 +15,7 @@
 #include "CadController.h"
 #include "NoiseFloorEstimator.h"
 #include "LoRaRadioOps.h"
+#include <helpers/FeatureObservation.h>
 
 namespace mesh {
 
@@ -31,6 +32,7 @@ public:
 	/* Promote only after the composition root has finished startup. */
 	void bootComplete();
 	bool startupReady() const { return _startup_ready; }
+	void formatImmuneStatus(char *reply, size_t size) const;
 
 	/* Callbacks */
 	void setRxCallback(RadioRxCallback cb, void *user_data) {
@@ -71,6 +73,7 @@ public:
 	uint32_t getPacketsRecvErrors() const override { return (uint32_t)atomic_get(&_packets_recv_errors); }
 	/* `clear stats`, including a family's own accumulators (LR2021). */
 	void resetStats() {
+		_immune.clearCounters(getPacketsRecv() + getPacketsRecvErrors());
 		atomic_set(&_packets_recv, 0);
 		atomic_set(&_packets_sent, 0);
 		atomic_set(&_packets_recv_errors, 0);
@@ -244,6 +247,7 @@ private:
 
 	const struct device *_dev;
 	NodePrefs *_prefs;
+	ImmuneObservation _immune;
 	RecoverySave _recovery_save = nullptr;
 	void *_recovery_context = nullptr;
 	bool _recovery_armed = false;

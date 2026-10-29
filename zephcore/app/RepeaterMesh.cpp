@@ -573,10 +573,10 @@ void RepeaterMesh::sendFloodReply(mesh::Packet* packet, unsigned long delay_mill
 bool RepeaterMesh::allowPacketForward(const mesh::Packet *packet) {
   if (_prefs.disable_fwd) return false;
   if (packet->isRouteFlood()
-      && mesh::isFloodHopLimitExceeded(packet, _prefs.flood_max, _prefs.flood_max_unscoped, _prefs.flood_max_advert)) {
+      && mesh::isFloodHopLimitExceeded(packet, _prefs.flood_max, _prefs.flood_max_unscoped, _prefs.flood_max_advert, _prefs.repeat_all)) {
     return false;
   }
-  if (packet->isRouteFlood() && recv_pkt_region == NULL) {
+  if (packet->isRouteFlood() && !_prefs.repeat_all && recv_pkt_region == NULL) {
     MESH_DEBUG_PRINTLN("allowPacketForward: unknown transport code, or wildcard not allowed for FLOOD packet");
     return false;
   }
@@ -1496,10 +1496,12 @@ void RepeaterMesh::loop() {
 
 /* ---- ZEPHCORE: methods upstream does not have ---- */
 
-void RepeaterMesh::savePrefs() {
-  if (_store) {
-    _store->savePrefs(_prefs);
-  }
+bool RepeaterMesh::savePrefs() {
+  return _store && _store->savePrefs(_prefs);
+}
+
+void RepeaterMesh::formatImmuneStatus(char *reply, size_t size) {
+  getRadioDriver(_radio).formatImmuneStatus(reply, size);
 }
 
 void RepeaterMesh::freezeRadioParams(float freq, float bw, uint8_t sf, uint8_t cr) {

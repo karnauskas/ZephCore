@@ -199,7 +199,8 @@ public:
     return &_prefs;
   }
 
-  void savePrefs() override;  // ZEPHCORE: through RepeaterDataStore
+  bool savePrefs() override;  // ZEPHCORE: through RepeaterDataStore
+  void formatImmuneStatus(char *reply, size_t size) override;
 
   void sendFloodScoped(const TransportKey& scope, mesh::Packet* pkt, uint32_t delay_millis, uint8_t path_hash_size);
 

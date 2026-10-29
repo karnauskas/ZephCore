@@ -9,8 +9,15 @@ execute_process(COMMAND ${Python3_EXECUTABLE}
   "${CMAKE_CURRENT_BINARY_DIR}/websocket_poll.inc" COMMAND_ERROR_IS_FATAL ANY)
 
 option(ZEPHCORE_TEST_SANITIZERS "Enable host address/undefined behavior sanitizers" OFF)
+set(SX127X_PATCH "${CMAKE_CURRENT_LIST_DIR}/../zephcore/patches/zephyr/0021-sx127x-rssi-callback.patch")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${SX127X_PATCH}")
+execute_process(COMMAND ${Python3_EXECUTABLE}
+  "${CMAKE_CURRENT_LIST_DIR}/support/sx127x_table_patch.py" "${SX127X_PATCH}"
+  "${CMAKE_CURRENT_BINARY_DIR}/sx127x_table.inc" COMMAND_ERROR_IS_FATAL ANY)
 set(PRODUCTION "${CMAKE_CURRENT_LIST_DIR}/../zephcore")
 add_executable(zephcore_unit
+  unit/sx127x_table_tests.cpp
+  unit/sx127x_rssi_tests.cpp
   unit/pingbot_tests.cpp
   ${PRODUCTION}/helpers/PingBot.cpp
   unit/websocket_poll_tests.cpp
@@ -70,6 +77,8 @@ add_executable(zephcore_unit
 target_compile_features(zephcore_unit PRIVATE cxx_std_17)
 target_compile_definitions(zephcore_unit PRIVATE CONFIG_ZEPHCORE_PACKET_LOGGING=0
   CONFIG_ZEPHCORE_UI_DESIGN_JOYSTICK=1 CONFIG_ZEPHCORE_UI_DESIGN_BUTTON=0)
+set_source_files_properties(unit/sx127x_rssi_tests.cpp PROPERTIES
+  INCLUDE_DIRECTORIES "${CMAKE_CURRENT_LIST_DIR}/support/radio_ops")
 target_include_directories(zephcore_unit PRIVATE
   ${CMAKE_CURRENT_BINARY_DIR}
   support unit ${PRODUCTION} ${PRODUCTION}/include ${PRODUCTION}/helpers ${PRODUCTION}/helpers/compat

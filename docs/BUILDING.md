@@ -108,6 +108,11 @@ own, so a local build of the same board and role is the same firmware.
 | STM32WL | `west flash` over SWD / ST-Link | No BLE or USB device: companion protocol and CLI run on USART1 |
 | Native Linux | Copy the binary to the SBC | See [LINUX_NATIVE.md](LINUX_NATIVE.md) |
 
+ProMicro SX1262 defaults to the UF2 runner. Enter the bootloader with `start dfu`
+or a double-tap of reset, mount its UF2 drive, then run `west flash -d build`.
+The runner copies the UF2 image; it does not enter the bootloader automatically.
+Existing builds need a pristine rebuild to pick up the runner configuration.
+
 Released ESP32 images are always MCUboot `-merged.bin`, written at offset 0. Heltec V3 and the classic
 ESP32 boards have their console and CLI on `uart0` (the USB-UART port).
 

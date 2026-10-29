@@ -341,3 +341,41 @@ TEST(pingbot_prefs, "UNIT-PINGBOT-004", "Pingbot defaults off persists in both J
 	sanitizeNodePrefs(&p);
 	CHECK(p.pingbot == 0);
 }
+
+TEST(observation_json, "UNIT-OBSERVE-004", "Observation flags persist in both JSON layouts and leave legacy bytes frozen") {
+	NodePrefs p = defaults();
+	CHECK(!p.immune && !p.winter && !p.winter_auto);
+	auto c = companionBytes(p), s = serverBytes(p);
+	p.immune = p.winter = p.winter_auto = 1;
+	CHECK(companionBytes(p) == c && serverBytes(p) == s);
+	MemStream cj, sj;
+	CHECK(companionPrefsToJson(p, cj) && serverPrefsToJson(p, sj));
+	NodePrefs q = defaults(), r = defaults();
+	CHECK(companionPrefsFromJson(q, cj) && serverPrefsFromJson(r, sj));
+	CHECK(q.immune && q.winter && q.winter_auto);
+	CHECK(r.immune && r.winter && r.winter_auto);
+	MemStream bad("{zc:{immune:255,winter:2,winter_auto:254}}");
+	q = defaults();
+	CHECK(serverPrefsFromJson(q, bad));
+	CHECK(!q.immune && !q.winter && !q.winter_auto);
+}
+
+TEST(pjson_repeat_all, "UNIT-PJSON-011", "Repeat all is opt-in and persists in server JSON only") {
+	NodePrefs p = defaults();
+	CHECK(p.repeat_all == 0);
+	std::string legacy = serverBytes(p);
+	p.repeat_all = 1;
+	CHECK(serverBytes(p) == legacy);
+	MemStream companion;
+	CHECK(companionPrefsToJson(p, companion));
+	CHECK(companion.data.find("repeat_all") == std::string::npos);
+	MemStream out;
+	CHECK(serverPrefsToJson(p, out));
+	NodePrefs loaded = defaults();
+	CHECK(serverPrefsFromJson(loaded, out));
+	CHECK(loaded.repeat_all == 1);
+	MemStream old("{}");
+	loaded = defaults();
+	CHECK(serverPrefsFromJson(loaded, old));
+	CHECK(loaded.repeat_all == 0);
+}

@@ -10,6 +10,7 @@ struct ObserverDisplayStatus {
 	bool wifi_ready;
 	bool mqtt_connected;
 	bool heard;
+	int16_t noise_floor_dbm, rssi_dbm, snr_quarters;
 };
 
 /* Eight text rows; last-heard refers to a successfully parsed mesh packet. */

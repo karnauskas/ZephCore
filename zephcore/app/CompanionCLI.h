@@ -31,8 +31,11 @@ public:
 		: _store(store), _mesh(mesh), _radio(radio), _board(board), _ms(ms), _pool(pool),
 		  _tx_idle(tx_idle) {}
 
-	void savePrefs() override {
-		_store.savePrefs(_mesh.prefs);
+	bool savePrefs() override {
+		return _store.savePrefs(_mesh.prefs);
+	}
+	void formatImmuneStatus(char *reply, size_t size) override {
+		_radio.formatImmuneStatus(reply, size);
 	}
 	const char* getFirmwareVer() override { return FIRMWARE_VERSION; }
 	const char* getBuildDate() override { return FIRMWARE_BUILD_DATE; }

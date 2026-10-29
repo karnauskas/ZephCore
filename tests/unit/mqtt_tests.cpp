@@ -79,10 +79,14 @@ TEST(mqtt_full_status, "UNIT-MQTT-009", "MQTT full status includes signed noise 
 	status.origin = "Observer"; status.origin_id = "pubkey";
 	status.radio = "869.618,62.5,8,8"; status.model = "test"; status.firmware_version = "test";
 	status.battery_mv = 4100; status.uptime_secs = 321; status.noise_floor = -119;
+	status.tx_air_secs = 0; status.rx_air_secs = 42; status.recv_errors = 3;
 	char json[1024];
 	int size = meshcore_build_status_json(json, sizeof(json), &status);
 	CHECK(size > 0 && size < (int)sizeof(json));
 	CHECK(strstr(json, "\"battery_mv\":4100") != nullptr);
 	CHECK(strstr(json, "\"uptime_secs\":321") != nullptr);
 	CHECK(strstr(json, "\"noise_floor\":-119") != nullptr);
+	CHECK(strstr(json, "\"tx_air_secs\":0") != nullptr);
+	CHECK(strstr(json, "\"rx_air_secs\":42") != nullptr);
+	CHECK(strstr(json, "\"recv_errors\":3") != nullptr);
 }

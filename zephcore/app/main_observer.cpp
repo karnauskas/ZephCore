@@ -210,6 +210,9 @@ static void print_banner(void)
 	cli_println("set bw        <idx|kHz>    0=125 1=250 2=500 3=62.5 4=41.7 5=31.25");
 	cli_println("set cr        <5-8>        Coding rate");
 	cli_println("");
+	cli_println("set immune|winter|winter.auto <on|off|default>  Observation flags");
+	cli_println("get immune.status / winter.status  RAM observations");
+	cli_println("winter reset               Clear RAM voltage history");
 	cli_println("--- Query ---");
 	cli_println("get name                   Node display name");
 	cli_println("get role                   Node role (observer)");
@@ -551,6 +554,8 @@ int main(void)
 				last_heard_ms < 0 ? 0 : (uint64_t)((now - last_heard_ms) / 1000),
 				zc_wifi_station_is_connected(), mqtt_publisher_is_connected(),
 				last_heard_ms >= 0,
+				(int16_t)lora_radio.getNoiseFloor(), (int16_t)lora_radio.getLastRSSI(),
+				(int16_t)(lora_radio.getLastSNR() * 4),
 			});
 		}
 #endif

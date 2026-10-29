@@ -17,6 +17,10 @@
 The implementation and limits are in [ADR 0014](adr/0014-radio-startup-recovery.md).
 The milestone is not field-verified until the hardware checks below pass.
 
+The proposed next step is [fault recognition and recovery outcome
+reporting](DIGITAL_IMMUNE_SYSTEM.md). It adds no recovery actions until a
+specific fault has evidence and a bounded implementation.
+
 ## Host acceptance
 
 - No snapshot before successful startup confirmation.

@@ -34,15 +34,17 @@ inline bool isUnscopedFlood(const Packet *packet)
  *                            may be clamped lower than scoped/transport floods
  * @param flood_max_advert    hop ceiling for ADVERT floods, typically tighter still
  *                            so advert churn stays local
+ * @param repeat_all          bypass the un-scoped-specific ceiling
  * @returns true if a limit is exceeded and the packet must not be forwarded
  */
 inline bool isFloodHopLimitExceeded(const Packet *packet, uint8_t flood_max,
-				    uint8_t flood_max_unscoped, uint8_t flood_max_advert)
+				    uint8_t flood_max_unscoped, uint8_t flood_max_advert,
+				    bool repeat_all = false)
 {
 	uint8_t hops = packet->getPathHashCount();
 
 	if (hops >= flood_max) return true;
-	if (isUnscopedFlood(packet) && hops >= flood_max_unscoped) return true;
+	if (!repeat_all && isUnscopedFlood(packet) && hops >= flood_max_unscoped) return true;
 	if (packet->getPayloadType() == PAYLOAD_TYPE_ADVERT && hops >= flood_max_advert) return true;
 	return false;
 }

@@ -138,3 +138,20 @@ TEST(offgrid_normalize, "UNIT-OFFGRID-003", "Off-grid: a repeat flag on a mesh f
     offgridFreqEdited(p);
     CHECK(p.client_repeat == 0 && p.offgrid_home_freq == 0.0f && p.freq == 868.0f);
 }
+
+TEST(repeat_all_limits, "UNIT-POLICY-004", "Repeat all bypasses unscoped ceiling but retains general and advert limits") {
+	Packet p;
+	for (uint8_t route : {ROUTE_TYPE_FLOOD, ROUTE_TYPE_TRANSPORT_FLOOD}) {
+		for (uint16_t code : {0, 0x1234}) {
+			p.transport_codes[0] = code;
+			for (uint8_t type : {PAYLOAD_TYPE_TXT_MSG, PAYLOAD_TYPE_ADVERT}) {
+				p.header = route | (type << 2);
+				for (unsigned hops = 0; hops <= 6; ++hops) {
+					p.setPathHashSizeAndCount(1, hops);
+					CHECK(isFloodHopLimitExceeded(&p, 5, 0, 2, true)
+					      == (hops >= (type == PAYLOAD_TYPE_ADVERT ? 2u : 5u)));
+				}
+			}
+		}
+	}
+}

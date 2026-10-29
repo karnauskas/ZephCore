@@ -21,7 +21,7 @@ TEST(observer_status, "UNIT-OBSERVER-001", "Observer screen shows link states co
 	CHECK(line(s, 2) == "RX 15");
 	CHECK(line(s, 3) == "Flood 12");
 	CHECK(line(s, 4) == "Direct 3");
-	CHECK(line(s, 5) == "RX errors 2");
+	CHECK(line(s, 5) == "Err 2 SNR:--");
 	s.flood = s.direct = UINT32_MAX;
 	CHECK(line(s, 2) == "RX 8589934590");
 }
@@ -44,4 +44,20 @@ TEST(observer_time, "UNIT-OBSERVER-002", "Observer uptime and last heard handle 
 	CHECK(std::strcmp(out, "Las") == 0);
 	observer_display_line(s, 7, out, 0);
 	CHECK(std::strcmp(out, "Las") == 0);
+}
+
+TEST(observer_rf, "UNIT-OBSERVER-003", "Observer LCD shows noise floor RSSI and quarter-dB SNR with unknown startup readings") {
+	ObserverDisplayStatus s{};
+	CHECK(line(s, 0) == "NF:-- RX:-- dBm");
+	CHECK(line(s, 5) == "Err 0 SNR:--");
+	s.noise_floor_dbm = -119;
+	CHECK(line(s, 0) == "NF:-119 RX:-- dBm");
+	s.heard = true; s.rssi_dbm = -117; s.snr_quarters = -1;
+	CHECK(line(s, 0) == "NF:-119 RX:-117 dBm");
+	CHECK(line(s, 5) == "Err 0 SNR:-0.25dB");
+	s.snr_quarters = 29;
+	CHECK(line(s, 5) == "Err 0 SNR:7.25dB");
+	char bounded[6] = {};
+	observer_display_line(s, 0, bounded, sizeof(bounded));
+	CHECK(std::string(bounded) == "NF:-1");
 }
