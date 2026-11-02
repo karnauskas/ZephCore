@@ -1349,6 +1349,7 @@ Build strings: `docs/supported_boards.md`. Flash methods: `docs/BUILDING.md`. Ad
 | Heltec Wireless Tracker | ESP32-S3 | SX1262 | UC6580 | TFT 160x80 (ST7735R) | - |
 | LilyGo T-Beam v1.2 | ESP32 (PICO-D4) | SX1262 | Yes | - | AXP2101 PMU; contacts capped at 160 |
 | LilyGo T-LoRa V2.1-1.6 (`ttgo_lora32`) | ESP32 (PICO-D4) | **SX1276** (loramac-node) | - | OLED (SSD1306) | GPIO0 button, GPIO25 LED, GPIO35 battery ADC; source-only |
+| ESP32-WROOM dev kit (`esp32_devkitc`) + RFM95W | ESP32-WROOM-32, 4 MB flash | **RFM95W / SX1276** (868 MHz, loramac-node) | - | - | DIY SPI3 wiring, USB-UART console, 50 contacts; source-only, unvalidated; [wiring](../zephcore/boards/esp32/esp32_devkitc/README.md) |
 | XIAO MG24 | EFR32MG24 | SX1262 | - | - | - |
 | Seeed LoRa-E5 mini | STM32WL | STM32WL sub-GHz (SX1262-class) | - | - | UART companion/CLI; contacts capped at 24 |
 

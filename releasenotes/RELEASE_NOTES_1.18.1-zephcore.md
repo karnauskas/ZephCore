@@ -37,6 +37,12 @@ becomes 5).
   failed start of that flash is retried at the next mount instead of staying failed until reboot.
 
 
+## ESP32-WROOM + RFM95W
+
+Added a source-only target for a 4 MB classic ESP32-WROOM dev kit wired to
+an 868 MHz RFM95W. Includes [wiring and build instructions](../zephcore/boards/esp32/esp32_devkitc/README.md)
+for BLE companion and serial repeater. Hardware operation has not been validated.
+
 ## ProMicro USB flashing
 
 ProMicro SX1262 now defaults to UF2 for `west flash`. Enter the bootloader and

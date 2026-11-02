@@ -51,6 +51,7 @@ xiao_nrf52840
 
 <!-- boards:esp32 -->
 ```
+esp32_devkitc/esp32/procpu                  # source-only, no published firmware
 heltec_wifi_lora32_v3/esp32s3/procpu
 heltec_wifi_lora32_v4/esp32s3/procpu
 heltec_wifi_lora32_v43/esp32s3/procpu
@@ -71,6 +72,11 @@ xiao_esp32s3/esp32s3/procpu
 <!-- /boards -->
 
 > ESP32 boards require `west blobs fetch hal_espressif` before first build.
+>
+> **ESP32-WROOM dev kit + RFM95W** (`esp32_devkitc/esp32/procpu`): source-only
+> DIY target for classic ESP32-WROOM-32 with 4 MB flash and an 868 MHz module.
+> Follow the [wiring and build guide](../zephcore/boards/esp32/esp32_devkitc/README.md);
+> the Micro-USB connector uses the onboard USB-UART bridge. Hardware is unvalidated.
 >
 > Heltec V3 console/shell use `uart0` (UART serial) in ZephCore.
 >
