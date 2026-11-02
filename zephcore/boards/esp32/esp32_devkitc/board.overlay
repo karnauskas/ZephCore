@@ -1,0 +1,61 @@
+/* SPDX-License-Identifier: MIT */
+
+/ {
+	aliases {
+		lora0 = &rfm95w;
+	};
+	chosen {
+		zephyr,settings-partition = &storage_partition;
+	};
+};
+
+/* The base DevKitC also describes WROVER; this target uses WROOM without PSRAM. */
+&psram0 {
+	size = <0>;
+};
+
+/* GPIO14 is the radio reset, not the inherited SPI2 clock. */
+&spi2 {
+	status = "disabled";
+};
+
+&spim3_default {
+	group1 {
+		pinmux = <SPIM3_MISO_GPIO19>, <SPIM3_SCLK_GPIO18>;
+	};
+};
+
+&spi3 {
+	cs-gpios = <&gpio0 27 GPIO_ACTIVE_LOW>;
+
+	rfm95w: lora@0 {
+		compatible = "semtech,sx1276";
+		reg = <0>;
+		spi-max-frequency = <8000000>;
+		reset-gpios = <&gpio0 14 GPIO_ACTIVE_LOW>;
+		dio-gpios = <&gpio0 26 (GPIO_PULL_DOWN | GPIO_ACTIVE_HIGH)>,
+			    <&gpio1 1 (GPIO_PULL_DOWN | GPIO_ACTIVE_HIGH)>,
+			    <&gpio1 0 (GPIO_PULL_DOWN | GPIO_ACTIVE_HIGH)>;
+		power-amplifier-output = "pa-boost";
+	};
+};
+
+/* Replace the inherited storage region with LittleFS and a separate bond store. */
+/delete-node/ &storage_partition;
+
+&flash0 {
+	partitions {
+		lfs_partition: partition@3b0000 {
+			compatible = "zephyr,mapped-partition";
+			label = "lfs";
+			reg = <0x3b0000 0x30000>;
+		};
+		storage_partition: partition@3e0000 {
+			compatible = "zephyr,mapped-partition";
+			label = "storage";
+			reg = <0x3e0000 0x4000>;
+		};
+	};
+};
+
+#include "../../common/filesystem.dtsi"
