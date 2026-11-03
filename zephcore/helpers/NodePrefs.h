@@ -130,6 +130,7 @@ struct NodePrefs {
 	uint8_t pingbot;                // JSON-only, public #test responder, default off
 	uint8_t adaptive_power;         // JSON-only power budget, default off
 	uint8_t immune, winter, winter_auto; // JSON-only observation controls, default off
+	uint8_t wardriving;             // JSON-only: 0 allow, 1 block unscoped, 2 block all floods
 	uint8_t repeat_all;             // JSON-only: bypass flood scope filtering
 	uint8_t adaptive_advert;        // JSON-only, opt-in periodic advert scheduling
 	uint8_t meshtimesync;           // 1 = mesh time-sync clock correction on (default off)
@@ -327,6 +328,7 @@ static inline void sanitizeNodePrefs(NodePrefs* p) {
 	p->immune = saneBool<uint8_t>(p->immune, 0);
 	p->winter = saneBool<uint8_t>(p->winter, 0);
 	p->winter_auto = saneBool<uint8_t>(p->winter_auto, 0);
+	p->wardriving = saneEnum(p->wardriving, 2);
 	p->repeat_all = saneBool<uint8_t>(p->repeat_all, 0);
 	p->adaptive_advert = saneBool<uint8_t>(p->adaptive_advert, 0);
 	p->meshtimesync        = saneBool<uint8_t>(p->meshtimesync, 0);

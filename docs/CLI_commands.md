@@ -693,3 +693,17 @@ normal filtering. Default: off. Saved in `prefs.json` as `zc.repeat_all`.
 Changes apply immediately without changing the region table or packet scope.
 `repeat off`, `flood.max`, `flood.max.advert`, duplicate suppression, loop detection
 and normal direct routing still apply. Room servers remain non-forwarding.
+
+### Wardriving channel forwarding (repeater only)
+
+`get wardriving` reports the policy. `set wardriving allow` (or `default`) forwards
+public `#wardriving` floods normally; `set wardriving scoped` blocks its unscoped
+floods; `set wardriving block` blocks all its floods. Changes apply immediately and
+persist in `prefs.json` (`zc.wardriving`). Default: `allow`.
+
+Plain floods and transport floods with first code `0` are unscoped. Channel
+identification requires successful MAC verification/decryption with the public
+hashtag key, so unrelated channels sharing its one-byte hash are unaffected.
+Both group text and group data are covered. Direct routing is unchanged.
+`repeat.all` does not bypass this channel policy; normal region and hop filters
+still apply to permitted traffic.

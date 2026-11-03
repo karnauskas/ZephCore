@@ -866,6 +866,16 @@
       "id": "UNIT-OBSERVER-003",
       "name": "Observer LCD shows noise floor RSSI and quarter-dB SNR with unknown startup readings",
       "source": "tests/unit/observer_display_tests.cpp"
+    },
+    {
+      "id": "UNIT-POLICY-006",
+      "name": "Wardriving modes filter authenticated channel floods by scope",
+      "source": "tests/unit/policy_tests.cpp"
+    },
+    {
+      "id": "UNIT-PJSON-019",
+      "name": "Wardriving policy defaults allow and persists only in server JSON",
+      "source": "tests/unit/prefs_json_tests.cpp"
     }
   ]
 }

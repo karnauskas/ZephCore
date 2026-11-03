@@ -379,3 +379,24 @@ TEST(pjson_repeat_all, "UNIT-PJSON-011", "Repeat all is opt-in and persists in s
 	CHECK(serverPrefsFromJson(loaded, old));
 	CHECK(loaded.repeat_all == 0);
 }
+
+TEST(pjson_wardriving, "UNIT-PJSON-019", "Wardriving policy defaults allow and persists only in server JSON") {
+	NodePrefs p = defaults();
+	CHECK(p.wardriving == 0);
+	std::string legacy = serverBytes(p);
+	for (uint8_t mode : {1, 2}) {
+		p.wardriving = mode;
+		CHECK(serverBytes(p) == legacy);
+		MemStream companion;
+		CHECK(companionPrefsToJson(p, companion));
+		CHECK(companion.data.find("wardriving") == std::string::npos);
+		MemStream out;
+		CHECK(serverPrefsToJson(p, out));
+		NodePrefs loaded = defaults();
+		CHECK(serverPrefsFromJson(loaded, out));
+		CHECK(loaded.wardriving == mode);
+	}
+	MemStream bad("{zc:{wardriving:3}}");
+	CHECK(serverPrefsFromJson(p, bad));
+	CHECK(p.wardriving == 0);
+}

@@ -1,5 +1,6 @@
 #include "test.h"
 #include <RoutingPolicy.h>
+#include <WardrivingPolicy.h>
 #include <OffgridPolicy.h>
 #include <RateLimiter.h>
 #include <mesh/Maintenance.h>
@@ -151,6 +152,25 @@ TEST(repeat_all_limits, "UNIT-POLICY-004", "Repeat all bypasses unscoped ceiling
 					CHECK(isFloodHopLimitExceeded(&p, 5, 0, 2, true)
 					      == (hops >= (type == PAYLOAD_TYPE_ADVERT ? 2u : 5u)));
 				}
+			}
+		}
+	}
+}
+
+TEST(wardriving_policy, "UNIT-POLICY-006", "Wardriving modes filter authenticated channel floods by scope") {
+	Packet p{};
+	for (uint8_t type : {PAYLOAD_TYPE_GRP_TXT, PAYLOAD_TYPE_GRP_DATA}) {
+		for (uint8_t route : {ROUTE_TYPE_FLOOD, ROUTE_TYPE_TRANSPORT_FLOOD, ROUTE_TYPE_DIRECT, ROUTE_TYPE_TRANSPORT_DIRECT}) {
+			p.header = route | (type << 2);
+			for (uint16_t code : {0, 1, 65535}) {
+				p.transport_codes[0] = code;
+				p.transport_codes[1] = 123;
+				CHECK(!blockWardriving(0, p, wardrivingChannel()));
+				CHECK(blockWardriving(1, p, wardrivingChannel()) == isUnscopedFlood(&p));
+				CHECK(blockWardriving(2, p, wardrivingChannel()) == p.isRouteFlood());
+				auto collision = wardrivingChannel();
+				collision.secret[0] ^= 1;
+				CHECK(!blockWardriving(2, p, collision));
 			}
 		}
 	}
