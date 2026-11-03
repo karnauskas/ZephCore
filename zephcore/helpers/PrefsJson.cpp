@@ -294,6 +294,7 @@ protected:
 		def("backoff", _p->backoff_multiplier);
 		def("adaptive_adv", _p->adaptive_advert);
 		def("repeat_all", _p->repeat_all);
+		def("wardriving", _p->wardriving);
 		def("disc_ts", _p->discovery_mod_timestamp);
 		def("gps_set", _p->gps_enabled_set);
 	}

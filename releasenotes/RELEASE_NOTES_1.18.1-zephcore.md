@@ -153,3 +153,10 @@ RSSI through Zephyr's LoRa API, replacing the fixed −80 dBm placeholder.
 This applies to every role using the shared radio adapter. Failed API queries
 are discarded by the existing burst sampler. Hardware RF accuracy has not been
 verified; a busy channel can influence the estimate.
+
+## Wardriving channel forwarding
+
+Repeaters can use `set wardriving scoped` to stop forwarding unscoped public
+`#wardriving` floods, or `set wardriving block` to stop all floods on that channel.
+`set wardriving allow` restores the default. The policy persists across reboot
+and applies even with `repeat.all` enabled. Other channels remain unaffected.

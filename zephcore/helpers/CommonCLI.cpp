@@ -1032,6 +1032,10 @@ void CommonCLI::handleGetCmd(uint32_t sender_timestamp, const char* command, cha
 		snprintf(reply, CLI_REPLY_SIZE, "> %s", _prefs->allow_read_only ? "on" : "off");
 #endif
 #ifdef CONFIG_ZEPHCORE_ROLE_REPEATER
+	// ZEPHCORE: public wardriving channel policy.
+	} else if (strcmp(config, "wardriving") == 0) {
+		snprintf(reply, CLI_REPLY_SIZE, "> %s", _prefs->wardriving == 2 ? "block" :
+			_prefs->wardriving == 1 ? "scoped" : "allow");
 	} else if (strcmp(config, "repeat.all") == 0) {
 		snprintf(reply, CLI_REPLY_SIZE, "> %s", _prefs->repeat_all ? "on" : "off");
 #endif
@@ -1480,6 +1484,18 @@ void CommonCLI::handleSetCmd(uint32_t sender_timestamp, const char* command, cha
 		}
 #endif
 #ifdef CONFIG_ZEPHCORE_ROLE_REPEATER
+	// ZEPHCORE: public wardriving channel policy.
+	} else if (memcmp(config, "wardriving ", 11) == 0) {
+		const char *value = config + 11;
+		int mode = strcmp(value, "allow") == 0 || strcmp(value, "default") == 0 ? 0 :
+			strcmp(value, "scoped") == 0 ? 1 : strcmp(value, "block") == 0 ? 2 : -1;
+		if (mode < 0) {
+			strcpy(reply, "Error: must be allow, scoped, block or default");
+		} else {
+			_prefs->wardriving = (uint8_t)mode;
+			savePrefs();
+			strcpy(reply, "OK");
+		}
 	} else if (memcmp(config, "repeat.all ", 11) == 0) {
 		int on = cliOnOff(&config[11], cliDefaults()->repeat_all);
 		if (on < 0) {

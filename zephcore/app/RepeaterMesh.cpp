@@ -1,4 +1,5 @@
 #include <helpers/PingBot.h>
+#include <helpers/WardrivingPolicy.h>
 #include <helpers/PowerBudget.h>
 #include "RepeaterMesh.h"
 //#include <algorithm>  // ZEPHCORE: not in Zephyr's minimal C++, see simple_sort
@@ -1642,16 +1643,22 @@ void RepeaterMesh::timeSyncTick() {
   login_fail_limiter.reset();
 }
 
-// ZEPHCORE: shared pingbot parsing and formatting, on the mesh thread.
+// ZEPHCORE: public channel authentication and pingbot, on the mesh thread.
 int RepeaterMesh::searchChannelsByHash(const uint8_t *hash, mesh::GroupChannel channels[], int max_matches)
 {
 	int count = 0;
+	if (_prefs.wardriving && hash[0] == wardrivingChannel().hash[0] && count < max_matches)
+		channels[count++] = wardrivingChannel();
 	return pingbotSearch(_prefs.pingbot, hash, channels, count, max_matches);
 }
 
 void RepeaterMesh::onGroupDataRecv(mesh::Packet *packet, uint8_t type, const mesh::GroupChannel& channel,
 	uint8_t *data, size_t len)
 {
+	if (blockWardriving(_prefs.wardriving, *packet, channel)) {
+		packet->markDoNotRetransmit();
+		return;
+	}
 	if (type == PAYLOAD_TYPE_GRP_TXT) {
 		uint8_t payload[PINGBOT_PAYLOAD_SIZE];
 		size_t size = pingbotReply(_prefs.pingbot, channel, *packet, data, len,
