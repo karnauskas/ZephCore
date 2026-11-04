@@ -642,7 +642,7 @@ sleep.
 | Path hash size | 2 bytes | `path_hash_mode = 1` |
 
 `helpers/LoRaConfig.h` seeds new preferences with the EU/UK (Narrow) preset;
-saved settings are retained. See [ADR 0011](adr/0011-lithuania-radio-defaults.md).
+saved settings are retained. See [ADR 0018](adr/0018-lithuania-radio-defaults.md).
 
 ---
 
@@ -871,7 +871,6 @@ Autonomous operation features:
 - **Authentication**: Password-based login with timestamp replay protection (120s window)
 - **Permission levels**: GUEST(0), READ_ONLY(1), READ_WRITE(2), ADMIN(3)
 - **Region filtering**: `RegionMap` with transport key matching per flood packet. Un-scoped floods (`mesh::isUnscopedFlood()`: plain floods, and transport floods with code 0 as upstream 1.18.0) go to the wildcard `*`, whose deny-flood flag and `flood.max.unscoped` apply to both, as upstream since `bd882a2a` (LLD 02 sections 16-17)
-
 - **Scope bypass**: repeater-only `set repeat.all on` (default off, JSON-only `zc.repeat_all`) ignores region/wildcard deny flags, unknown scopes and the unscoped-specific hop ceiling while forwarding. General/advert hop ceilings, forwarding disable, duplicate suppression, loop detection and direct routing still apply; received scope metadata and outgoing packet scopes are preserved. Room servers never forward.
 - **Wardriving forwarding**: repeater-only `set wardriving allow|scoped|block` (default allow, JSON-only `zc.wardriving`) filters public `#wardriving` text/data floods after channel authentication in `onGroupDataRecv`, before flood routing. Scoped mode denies plain and code-0 transport floods; block denies all floods for that key. Other keys, including hash collisions, and direct routing are unaffected. `repeat.all` does not bypass it. One preference byte (alignment-dependent), a 33-byte constant channel, and existing group-decryption stack buffers; no heap or new persistent legacy fields.
 - **Rate limiting**: 4 requests per 120s (discovery), 4 per 180s (anonymous), 4 failed logins per 180s

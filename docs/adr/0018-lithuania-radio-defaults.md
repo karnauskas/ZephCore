@@ -1,4 +1,4 @@
-# 0011: Match Atviras Tinklas radio defaults
+# 0018: Match Atviras Tinklas radio defaults
 
 ## Status
 

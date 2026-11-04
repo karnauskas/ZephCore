@@ -14,11 +14,12 @@ restructure; most describe decisions taken earlier. The system view is in [../DE
 | [0007](0007-adaptive-contention-window.md) | Adaptive contention window instead of static tx/rx delays |
 | [0008](0008-storage-and-settings-backend.md) | Storage layout, power-loss writes, BLE bonds in NVS |
 | [0009](0009-wifi-companion-boards.md) | WiFi companion boards and contact counts |
-| [0011](0011-esp32-companion-ble-ota.md) | ESP32 companions update over BLE with MCUmgr (sysbuild builds; `ble_ota: false` opts a board out) |
 | [0010](0010-adaptive-advertisements.md) | Opt-in adaptive periodic mesh advertisements |
-| [0011](0011-lithuania-radio-defaults.md) | Match Atviras Tinklas radio defaults |
+| [0011](0011-esp32-companion-ble-ota.md) | ESP32 companions update over BLE with MCUmgr (sysbuild builds; `ble_ota: false` opts a board out) |
 | [0012](0012-clock-fusion-diagnostics.md) | Add drift and confidence to mesh clock fusion |
 | [0013](0013-adaptive-power-budget.md) | Opt-in adaptive power budget |
 | [0014](0014-radio-startup-recovery.md) | Validate startup and retain last-known-good modem configuration |
+| [0015](0015-companion-location-privacy.md) | Companion location privacy |
 | [0016](0016-mqtt-websocket-auth.md) | MQTT WebSockets and node identity authentication |
 | [0017](0017-recovery-and-power-observations.md) | Opt-in recovery and raw power observations; automatic policy deferred |
+| [0018](0018-lithuania-radio-defaults.md) | Match Atviras Tinklas radio defaults |
