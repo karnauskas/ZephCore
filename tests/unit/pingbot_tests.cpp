@@ -27,7 +27,22 @@ TEST(pingbot_match, "UNIT-PINGBOT-001", "Pingbot matches only enabled test chann
 	Ping p;
 	CHECK(p.run(false) == 0);
 	CHECK(p.run() == 5 + p.text().size());
-	CHECK(p.text() == "Node: Pong @Alice RSSI=-97dBm SNR=-0.25dB hops=2 ids=ABCD,1234");
+	CHECK(p.text() == "Node: Pong @[Alice] -97(good)/-0.25(fair) ABCD,1234");
+	const struct { int rssi; int snr; const char *labels; } levels[] = {
+		{ -70, 40, "-70(excellent)/10.00(excellent)" },
+		{ -71, 39, "-71(good)/9.75(good)" },
+		{ -100, 0, "-100(good)/0.00(good)" },
+		{ -101, -1, "-101(fair)/-0.25(fair)" },
+		{ -110, -30, "-110(fair)/-7.50(fair)" },
+		{ -111, -31, "-111(weak)/-7.75(weak)" },
+		{ -120, -60, "-120(weak)/-15.00(weak)" },
+		{ -121, -61, "-121(poor)/-15.25(poor)" },
+	};
+	for (const auto& level : levels) {
+		p.packet._snr = level.snr;
+		CHECK(pingbotReply(true, pingbotChannel(), p.packet, p.data, 32, level.rssi, "Node", 1234, p.reply) > 0);
+		CHECK(p.text() == std::string("Node: Pong @[Alice] ") + level.labels + " ABCD,1234");
+	}
 	uint32_t timestamp;
 	memcpy(&timestamp, p.reply, 4);
 	CHECK(timestamp == 1234 && p.reply[4] == 0);
@@ -49,11 +64,11 @@ TEST(pingbot_match, "UNIT-PINGBOT-001", "Pingbot matches only enabled test chann
 TEST(pingbot_paths, "UNIT-PINGBOT-002", "Pingbot formats hop widths zero hops and bounded truncated paths") {
 	Ping p;
 	p.packet.setPathHashSizeAndCount(1, 0);
-	CHECK(p.run() > 0 && p.text().find("hops=0 ids=none") != std::string::npos);
+	CHECK(p.run() > 0 && p.text() == "Node: Pong @[Alice] -97(good)/-0.25(fair)");
 	for (unsigned width = 1; width <= 3; ++width) {
 		p.packet.setPathHashSizeAndCount(width, 2);
 		CHECK(p.run() > 0);
-		CHECK(p.text().find(width == 1 ? "ids=AB,CD" : width == 2 ? "ids=ABCD,1234" : "ids=ABCD12,340000") != std::string::npos);
+		CHECK(p.text().find(width == 1 ? " AB,CD" : width == 2 ? " ABCD,1234" : " ABCD12,340000") != std::string::npos);
 		p.packet.setPathHashSizeAndCount(width, 63 / width);
 		CHECK(p.run() <= PINGBOT_PAYLOAD_SIZE - 1);
 		CHECK(p.text().find(",...") != std::string::npos);
@@ -81,16 +96,16 @@ TEST(pingbot_addressee, "UNIT-PINGBOT-005", "Pingbot addresses bounded sender na
 	Ping p;
 	memset(p.data + 5, 0, sizeof(p.data) - 5);
 	memcpy(p.data + 5, "Bob: !ping", 10);
-	CHECK(p.run() > 0 && p.text().find("Pong @Bob RSSI=") != std::string::npos);
+	CHECK(p.run() > 0 && p.text().find("Pong @[Bob] -97(good)/-0.25(fair)") != std::string::npos);
 	memset(p.data + 5, 'A', 100);
 	memcpy(p.data + 105, ": !ping", 7);
 	memset(p.data + 112, 0, sizeof(p.data) - 112);
 	p.packet.setPathHashSizeAndCount(1, 63);
 	CHECK(p.run(true, sizeof(p.data)) <= PINGBOT_PAYLOAD_SIZE - 1);
-	CHECK(p.text().find("Pong @" + std::string(31, 'A') + " RSSI=") != std::string::npos);
+	CHECK(p.text().find("Pong @[" + std::string(31, 'A') + "] -97(good)/-0.25(fair)") != std::string::npos);
 	CHECK(p.text().find(",...") != std::string::npos);
 	CHECK(p.reply[PINGBOT_PAYLOAD_SIZE] == 0xA5);
 	memset(p.data + 5, 0, sizeof(p.data) - 5);
 	memcpy(p.data + 5, "!ping", 5);
-	CHECK(p.run() > 0 && p.text().find("Pong RSSI=") != std::string::npos);
+	CHECK(p.run() > 0 && p.text().find("Pong -97(good)/-0.25(fair)") != std::string::npos);
 }

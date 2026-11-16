@@ -54,14 +54,14 @@ size_t pingbotReply(bool enabled, const mesh::GroupChannel& channel, const mesh:
 	int snr = static_cast<int>(packet.getSNR() * 4);
 	unsigned magnitude = snr < 0 ? -snr : snr;
 	size_t used = snprintf(reply, max_text + 1,
-		"%.31s: Pong%s%.*s RSSI=%ddBm SNR=%s%u.%02udB hops=%u ids=",
-		name, sender_len ? " @" : "", sender_len, sender, rssi, snr < 0 ? "-" : "", magnitude / 4, (magnitude % 4) * 25,
-		packet.getPathHashCount());
+		"%.31s: Pong%s%.*s%s %d(%s)/%s%u.%02u(%s)%s",
+		name, sender_len ? " @[" : "", sender_len, sender, sender_len ? "]" : "",
+		rssi, rssi >= -70 ? "excellent" : rssi >= -100 ? "good" :
+			rssi >= -110 ? "fair" : rssi >= -120 ? "weak" : "poor", snr < 0 ? "-" : "", magnitude / 4,
+		(magnitude % 4) * 25, snr >= 40 ? "excellent" : snr >= 0 ? "good" :
+			snr >= -30 ? "fair" : snr >= -60 ? "weak" : "poor",
+		packet.getPathHashCount() ? " " : "");
 	const unsigned count = packet.getPathHashCount(), width = packet.getPathHashSize();
-	if (count == 0) {
-		strcpy(reply + used, "none");
-		used += 4;
-	}
 	for (unsigned i = 0; i < count; ++i) {
 		const size_t required = (i ? 1 : 0) + width * 2;
 		if (used + required + (i + 1 < count ? 4 : 0) > max_text) {

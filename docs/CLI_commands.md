@@ -657,13 +657,27 @@ When enabled, send exactly `!ping` in public `#test`. The node listens without
 using a saved channel slot and replies, for example:
 
 ```text
-MyNode: Pong @Alice RSSI=-97dBm SNR=-0.25dB hops=2 ids=ABCD,1234
+MyNode: Pong @[Alice] -97(good)/-0.25(fair) ABCD,1234
 ```
 
-RSSI and SNR describe the last link into the responding node. `hops` counts
-recorded repeaters, excluding sender and responder; `ids` contains their path
-hash prefixes, not full public keys. Direct reception shows `hops=0 ids=none`.
-Long paths end in `,...`; the count still describes the complete received path.
+The message body is `Pong @[Alice] -97(good)/-0.25(fair) ABCD,1234`;
+`MyNode: ` is the normal channel sender prefix. The numbers are last-link
+RSSI in dBm and SNR in dB, respectively. Labels use the following qualitative scale:
+
+| Label | RSSI (dBm) | SNR (dB) |
+|---|---|---|
+| excellent | ≥ −70 | ≥ 10 |
+| good | ≥ −100, < −70 | ≥ 0, < 10 |
+| fair | ≥ −110, < −100 | ≥ −7.5, < 0 |
+| weak | ≥ −120, < −110 | ≥ −15, < −7.5 |
+| poor | < −120 | < −15 |
+
+These are presentation ranges, not decoding thresholds: LoRa can decode below
+the noise floor, with limits depending on spreading factor and bandwidth. See
+[Semtech’s LoRa FAQ](https://www.semtech.com/design-support/faq/p0/p0).
+
+Bare IDs are recorded repeater path hash prefixes, not full public keys.
+Direct reception omits IDs; hop counts are omitted. Long paths end in `,...`.
 Observer and room-server firmware do not offer this command.
 
 ### MQTT packet diagnostics

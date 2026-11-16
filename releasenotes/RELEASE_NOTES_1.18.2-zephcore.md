@@ -46,3 +46,9 @@ state.
   of starting again from 0 on a busy node (from upstream MeshCore).
 
 - **Zephyr updated to a newer main.** The base system moves forward by about 1,100 upstream commits, including Bluetooth host fixes. Nothing changes in how the nodes are used.
+
+## Compact ping replies
+
+Public `!ping` replies now use `Pong @[Alice] -97(good)/-0.25(fair) ABCD,1234`
+after the normal sender prefix. RSSI/SNR have short quality hints, hop IDs have
+no labels or counts, and direct replies omit IDs.

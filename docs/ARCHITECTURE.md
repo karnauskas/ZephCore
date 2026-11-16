@@ -667,12 +667,15 @@ without a stored channel slot, and handles exactly `!ping` after the normal
 `sender: ` prefix. Configured companion channels continue to reach the app.
 Only group text floods trigger a reply; normal mesh deduplication and the TX
 queue/duty-cycle rules apply. Work runs on the mesh thread without heap allocation.
-The response addresses the sender as `@name` (up to 31 bytes) and includes the
-responder name, last-link RSSI/SNR, recorded repeater
-hop count and comma-separated path ID prefixes in reception order. Hop IDs use
-the packet's one-, two- or three-byte hash width; they are not full public keys.
-Zero hops means direct reception. The 160-byte text budget truncates whole hop
-IDs with `,...` while retaining the full count. Repeater responses use the
+The response body is `Pong @[name] RSSI(label)/SNR(label)` followed by bare,
+comma-separated repeater path ID prefixes in reception order. Sender names are
+bounded to 31 bytes; the responder retains the normal channel sender prefix.
+RSSI is in dBm and SNR in dB. Qualitative hints use `excellent`, `good`, `fair`,
+`weak` and `poor`, with RSSI boundaries −70/−100/−110/−120 dBm and SNR
+boundaries 10/0/−7.5/−15 dB. These presentation ranges are not decoding thresholds.
+Hop IDs use the packet's one-, two- or three-byte hash width, not full public
+keys. Direct reception omits IDs; no hop count is included. The 160-byte text
+budget truncates whole hop IDs with `,...`. Repeater responses use the
 request's region scope through `sendFloodReply`; companions use channel scope.
 Observers remain listen-only; room servers do not run pingbot.
 
