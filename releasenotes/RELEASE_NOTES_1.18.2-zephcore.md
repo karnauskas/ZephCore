@@ -55,10 +55,14 @@ no labels or counts, and direct replies omit IDs.
 
 ## Antenna measurement statistics
 
-Companions and repeaters now offer local CLI antenna measurements. Use
+Companions and repeaters now offer antenna measurements through local and
+authorized remote MeshCore CLI sessions. Remote replies use short key prefixes
+to fit all readings in one response. Use
 `antenna reset`, `antenna probe`, then `antenna` and `antenna <0..7>` to compare
 direct neighbours. Up to eight neighbours have RSSI/SNR minimum, mean and maximum
-readings. Probe replies also report how the neighbour heard your transmission
+readings, with quality words describing each mean on the same scale as ping
+replies. Remote replies use four-byte key prefixes and omit age to fit the labels.
+Probe replies also report how the neighbour heard your transmission
 (SNR only). Statistics live in RAM and clear on reboot; probes run only on request.
 
 ## Runtime TX-power changes

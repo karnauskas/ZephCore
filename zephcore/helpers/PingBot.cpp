@@ -1,4 +1,5 @@
 #include "PingBot.h"
+#include "SignalQuality.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -56,10 +57,8 @@ size_t pingbotReply(bool enabled, const mesh::GroupChannel& channel, const mesh:
 	size_t used = snprintf(reply, max_text + 1,
 		"%.31s: Pong%s%.*s%s %d(%s)/%s%u.%02u(%s)%s",
 		name, sender_len ? " @[" : "", sender_len, sender, sender_len ? "]" : "",
-		rssi, rssi >= -70 ? "excellent" : rssi >= -100 ? "good" :
-			rssi >= -110 ? "fair" : rssi >= -120 ? "weak" : "poor", snr < 0 ? "-" : "", magnitude / 4,
-		(magnitude % 4) * 25, snr >= 40 ? "excellent" : snr >= 0 ? "good" :
-			snr >= -30 ? "fair" : snr >= -60 ? "weak" : "poor",
+		rssi, rssiQuality(rssi), snr < 0 ? "-" : "", magnitude / 4,
+		(magnitude % 4) * 25, snrQuality(snr / 4.0),
 		packet.getPathHashCount() ? " " : "");
 	const unsigned count = packet.getPathHashCount(), width = packet.getPathHashSize();
 	for (unsigned i = 0; i < count; ++i) {

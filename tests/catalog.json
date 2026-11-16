@@ -906,6 +906,16 @@
       "id": "UNIT-RADIOCFG-002",
       "name": "Full RX configuration and loramac direction changes obey the driver state contract",
       "source": "tests/unit/radio_config_tests.cpp"
+    },
+    {
+      "id": "UNIT-ANTENNA-005",
+      "name": "Remote antenna commands pass the companion allowlist and fit mesh replies",
+      "source": "tests/unit/antenna_stats_tests.cpp"
+    },
+    {
+      "id": "UNIT-ANTENNA-006",
+      "name": "Antenna labels classify means on the ping scale and keep mesh readings complete",
+      "source": "tests/unit/antenna_stats_tests.cpp"
     }
   ]
 }

@@ -14,6 +14,12 @@ execute_process(COMMAND ${Python3_EXECUTABLE}
   "${CMAKE_CURRENT_LIST_DIR}/support/radio_config_boundary.py" "${RADIO_CONFIG_SOURCE}"
   "${CMAKE_CURRENT_BINARY_DIR}/radio_config.inc" COMMAND_ERROR_IS_FATAL ANY)
 
+set(COMPANION_CLI_SOURCE "${CMAKE_CURRENT_LIST_DIR}/../zephcore/app/CompanionMesh.cpp")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${COMPANION_CLI_SOURCE}")
+execute_process(COMMAND ${Python3_EXECUTABLE}
+  "${CMAKE_CURRENT_LIST_DIR}/support/companion_cli_boundary.py" "${COMPANION_CLI_SOURCE}"
+  "${CMAKE_CURRENT_BINARY_DIR}/companion_cli.inc" COMMAND_ERROR_IS_FATAL ANY)
+
 option(ZEPHCORE_TEST_SANITIZERS "Enable host address/undefined behavior sanitizers" OFF)
 set(SX127X_PATCH "${CMAKE_CURRENT_LIST_DIR}/../zephcore/patches/zephyr/0021-sx127x-rssi-callback.patch")
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${SX127X_PATCH}")

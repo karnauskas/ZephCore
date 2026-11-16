@@ -1030,11 +1030,9 @@ void CompanionMesh::onCLICommandRecv(const ContactInfo &contact, mesh::Packet *p
 	}
 }
 
-/* Over the air, a contact with flag 0x10 reaches the commands upstream's
- * companion handles (MyMesh::handleCommand and CommonRadioPrefs) and nothing
- * else: the ZephCore-only commands (start ota/dfu, erase, prv.key, clkreboot,
- * v.contact, autoshutdown, ...) stay local. */
-static bool isUpstreamCompanionCommand(const char *cmd)
+/* Remote CLI requires contact flag 0x10. It exposes upstream companion
+ * commands and antenna diagnostics; other ZephCore-only commands stay local. */
+static bool isRemoteCompanionCommand(const char *cmd)
 {
 	static const char *const exact[] = {
 		"get radio", "get freq", "get af", "get dutycycle", "get int.thresh", "get cad",
@@ -1042,14 +1040,14 @@ static bool isUpstreamCompanionCommand(const char *cmd)
 		"get path.hash.mode", "get multi.acks", "get txdelay", "get direct.txdelay",
 		"reboot", "poweroff", "shutdown", "get name", "get wifi.pwd", "set wifi.clear",
 		"get wifi.ssid", "get wifi.enabled", "get wifi.status", "get wifi.ip",
-		"board", "ver", "get tz.offset",
+		"board", "ver", "get tz.offset", "antenna",
 	};
 	static const char *const prefix[] = {
 		"set radio ", "set af ", "set dutycycle ", "set int.thresh ", "set cad ",
 		"set radio.rxgain ", "get tx ", "set tx ", "set rxdelay ", "set agc.reset.interval ",
 		"set path.hash.mode ", "set multi.acks ", "set txdelay ", "set direct.txdelay ",
 		"set name ", "set pin ", "set wifi.ssid ", "set wifi.pwd ", "set wifi.enabled ",
-		"set tz.offset ",
+		"set tz.offset ", "antenna ",
 	};
 	for (const char *e : exact) {
 		if (strcmp(cmd, e) == 0) return true;
@@ -1073,7 +1071,7 @@ bool CompanionMesh::handleCommand(const char *command, uint32_t sender_timestamp
 	}
 	*reply = 0;
 
-	if (!local && !isUpstreamCompanionCommand(command)) {
+	if (!local && !isRemoteCompanionCommand(command)) {
 		return false;
 	}
 	if (!local && prefs.privacy.schedule && !strncmp(command, "set tz.offset ", 14)) {

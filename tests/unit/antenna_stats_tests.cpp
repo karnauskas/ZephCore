@@ -1,6 +1,7 @@
 #include "test.h"
 #include "dispatcher_fixture.h"
 #include <helpers/AntennaStats.h>
+#include "companion_cli.inc"
 
 namespace {
 struct Fixture {
@@ -77,7 +78,7 @@ TEST(antenna_samples, "UNIT-ANTENNA-001", "Antenna aggregates signed readings an
 	f.stats.advert(f.packet, f.key, -100, 100);
 	f.packet._snr = 10;
 	f.stats.advert(f.packet, f.key, -90, 200);
-	CHECK(f.text(0, 2200).find("age=2s RX=2 RSSI=-100/-95.00/-90 SNR=-0.25/1.12/2.50 TX=0") != std::string::npos);
+	CHECK(f.text(0, 2200).find("age=2s RX=2 RSSI=-100/-95.00/-90(good) SNR=-0.25/1.12/2.50(good) TX=0") != std::string::npos);
 	f.packet.setPathHashSizeAndCount(2, 1);
 	f.stats.advert(f.packet, f.key, -40, 300);
 	CHECK(f.text().find("RX=2") != std::string::npos);
@@ -108,7 +109,7 @@ TEST(antenna_probe, "UNIT-ANTENNA-002", "Antenna accepts one full-key direct dis
 	CHECK(f.text().find("0 stored") != std::string::npos);
 	f.packet.setPathHashSizeAndCount(2, 0);
 	f.stats.discovery(f.packet, -97, 100);
-	CHECK(f.text().find("RX=1 RSSI=-97/-97.00/-97 SNR=-0.25/-0.25/-0.25 TX=1 SNR=-7.75/-7.75/-7.75") != std::string::npos);
+	CHECK(f.text().find("RX=1 RSSI=-97/-97.00/-97(good) SNR=-0.25/-0.25/-0.25(fair) TX=1 SNR=-7.75/-7.75/-7.75(weak)") != std::string::npos);
 	f.stats.discovery(f.packet, -40, 200);
 	CHECK(f.text().find("RX=1") != std::string::npos);
 	f.response(43);
@@ -150,4 +151,62 @@ TEST(antenna_bounds, "UNIT-ANTENNA-003", "Antenna bounds storage by full identit
 	f.response();
 	f.stats.discovery(f.packet, -97, 100);
 	CHECK(f.text().find("0 stored") != std::string::npos);
+}
+
+TEST(antenna_remote, "UNIT-ANTENNA-005", "Remote antenna commands pass the companion allowlist and fit mesh replies") {
+	for (const char *command : { "antenna", "antenna 0", "antenna probe", "antenna reset" }) {
+		CHECK(isRemoteCompanionCommand(command));
+	}
+	for (const char *command : { "antennas", "antenna.reset", "start ota", "erase", "get prv.key" }) {
+		CHECK(!isRemoteCompanionCommand(command));
+	}
+	Fixture f;
+	f.response();
+	f.stats.startProbe(42, 0);
+	f.stats.discovery(f.packet, -97, 100);
+	char reply[162];
+	memset(reply, 0xA5, sizeof(reply));
+	CHECK(f.stats.command("antenna 0", reply, 161, 200));
+	CHECK(static_cast<unsigned char>(reply[161]) == 0xA5);
+	CHECK(std::string(reply) == "0 AB000000 RX=1 RSSI=-97/-97.00/-97(good) SNR=-0.25/-0.25/-0.25(fair) TX=1 SNR=-7.75/-7.75/-7.75(weak)");
+	CHECK(f.text().find(std::string(62, '0')) != std::string::npos);
+	CHECK(f.stats.command("antenna reset", reply, 161, 200));
+	CHECK(f.text().find("0 stored") != std::string::npos);
+}
+
+TEST(antenna_quality, "UNIT-ANTENNA-006", "Antenna labels classify means on the ping scale and keep mesh readings complete") {
+	const struct { int rssi, snr; const char *rssi_label, *snr_label; } levels[] = {
+		{ -70, 40, "excellent", "excellent" },
+		{ -71, 39, "good", "good" },
+		{ -100, 0, "good", "good" },
+		{ -101, -1, "fair", "fair" },
+		{ -110, -30, "fair", "fair" },
+		{ -111, -31, "weak", "weak" },
+		{ -120, -60, "weak", "weak" },
+		{ -121, -61, "poor", "poor" },
+	};
+	for (const auto& level : levels) {
+		Fixture f;
+		f.packet._snr = level.snr;
+		f.stats.advert(f.packet, f.key, level.rssi, 0);
+		f.response();
+		f.packet.payload[1] = static_cast<uint8_t>(level.snr);
+		f.stats.startProbe(42, 0);
+		f.stats.discovery(f.packet, level.rssi, 100);
+		char reply[162];
+		memset(reply, 0xA5, sizeof(reply));
+		f.stats.format(0, reply, 161, 200);
+		std::string text(reply);
+		CHECK(text.find(std::string("(") + level.rssi_label + ") SNR=") != std::string::npos);
+		CHECK(text.find(std::string("(") + level.snr_label + ") TX=1 SNR=") != std::string::npos);
+		CHECK(text.substr(text.size() - strlen(level.snr_label) - 2) == std::string("(") + level.snr_label + ")");
+		CHECK(static_cast<unsigned char>(reply[161]) == 0xA5);
+	}
+	Fixture f;
+	f.packet._snr = 0;
+	f.stats.advert(f.packet, f.key, -100, 0);
+	f.packet._snr = -1;
+	f.stats.advert(f.packet, f.key, -101, 100);
+	CHECK(f.text().find("RSSI=-101/-100.50/-100(fair)") != std::string::npos);
+	CHECK(f.text().find("(fair) TX=0") != std::string::npos);
 }

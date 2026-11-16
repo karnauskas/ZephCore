@@ -463,12 +463,10 @@ void CommonCLI::handleCommand(uint32_t sender_timestamp, const char* command, ch
 	} else if (_region_map && memcmp(command, "region", 6) == 0) {
 		handleRegionCmdCopy(sender_timestamp, command, reply);
 #endif
-	// ZEPHCORE: local antenna-test diagnostics, shared by companion and repeater.
+	// ZEPHCORE: antenna-test diagnostics, shared by companion and repeater.
 	} else if (strcmp(command, "antenna") == 0 || strncmp(command, "antenna ", 8) == 0) {
 		auto *stats = _callbacks->getAntennaStats();
-		if (sender_timestamp != 0) {
-			snprintf(reply, replyCap(sender_timestamp), "Local command only");
-		} else if (!stats) {
+		if (!stats) {
 			snprintf(reply, replyCap(sender_timestamp), "not available");
 		} else if (strcmp(command, "antenna probe") == 0) {
 			snprintf(reply, replyCap(sender_timestamp), "%s",

@@ -2,6 +2,7 @@
 
 #include <mesh/Mesh.h>
 #include <helpers/AdvertDataHelpers.h>
+#include <helpers/SignalQuality.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -93,18 +94,24 @@ public:
 		}
 		const auto& e = _entries[index];
 		char key[PUB_KEY_SIZE * 2 + 1];
-		for (unsigned i = 0; i < PUB_KEY_SIZE; ++i) snprintf(key + i * 2, 3, "%02X", e.key[i]);
+		const bool remote = size <= 161;
+		const unsigned key_bytes = remote ? 4 : PUB_KEY_SIZE;
+		for (unsigned i = 0; i < key_bytes; ++i) snprintf(key + i * 2, 3, "%02X", e.key[i]);
+		char age[32] = {};
+		if (!remote) snprintf(age, sizeof(age), " age=%lus", (unsigned long)(uint32_t(now - e.heard) / 1000));
+		const double rssi_mean = double(e.rssi.sum) / e.rssi.count;
+		const double snr_mean = double(e.snr.sum) / e.snr.count / 4;
 		int used = snprintf(reply, size,
-			"%u %s age=%lus RX=%lu RSSI=%d/%.2f/%d SNR=%.2f/%.2f/%.2f TX=%lu",
-			index, key, (unsigned long)(uint32_t(now - e.heard) / 1000),
-			(unsigned long)e.rssi.count, e.rssi.min, double(e.rssi.sum) / e.rssi.count, e.rssi.max,
-			e.snr.min / 4.0, double(e.snr.sum) / e.snr.count / 4, e.snr.max / 4.0,
+			"%u %s%s RX=%lu RSSI=%d/%.2f/%d(%s) SNR=%.2f/%.2f/%.2f(%s) TX=%lu",
+			index, key, age,
+			(unsigned long)e.rssi.count, e.rssi.min, rssi_mean, e.rssi.max, rssiQuality(rssi_mean),
+			e.snr.min / 4.0, snr_mean, e.snr.max / 4.0, snrQuality(snr_mean),
 			(unsigned long)e.remote_snr.count);
 		if (used < 0 || size_t(used) >= size) return;
 		if (e.remote_snr.count) {
-			snprintf(reply + used, size - used, " SNR=%.2f/%.2f/%.2f",
-				e.remote_snr.min / 4.0, double(e.remote_snr.sum) / e.remote_snr.count / 4,
-				e.remote_snr.max / 4.0);
+			const double remote_mean = double(e.remote_snr.sum) / e.remote_snr.count / 4;
+			snprintf(reply + used, size - used, " SNR=%.2f/%.2f/%.2f(%s)",
+				e.remote_snr.min / 4.0, remote_mean, e.remote_snr.max / 4.0, snrQuality(remote_mean));
 		}
 	}
 

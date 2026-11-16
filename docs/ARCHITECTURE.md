@@ -686,16 +686,21 @@ Observers remain listen-only; room servers do not run pingbot.
 
 ### Antenna measurement statistics
 
-Companion and repeater roles share `helpers/AntennaStats.h`. Local CLI commands
+Companion and repeater roles share `helpers/AntennaStats.h`. CLI commands
 `antenna`, `antenna <0..7>`, `antenna probe` and `antenna reset` inspect or clear
-an eight-entry FIFO keyed by full public keys. The collector uses 728 bytes of
+an eight-entry FIFO keyed by full public keys. Existing CLI permissions apply
+to remote use; companion contacts need the remote-CLI permission. Remote replies
+show four-byte key prefixes and omit age so readings and labels fit the 160-byte
+text budget; local replies show full keys and age. The collector uses 728 bytes of
 static RAM per role on nRF52840, no heap or background polling, and no persistent
 settings.
 
 RX samples come from verified, zero-hop, non-share adverts and matched zero-hop
 discovery responses. Arbitrary packets cannot reliably identify their immediate
 transmitter and do not contribute. Each entry holds counts, RSSI/SNR minimum,
-mean and maximum, plus last-received monotonic time. Discovery responses are
+mean and maximum, plus last-received monotonic time. RX RSSI/SNR and reported
+TX SNR groups label the mean using the shared `helpers/SignalQuality.h` ping
+scale (`excellent`, `good`, `fair`, `weak`, `poor`). Discovery responses are
 unsigned; their claimed identity and remote SNR are diagnostic, not authenticated.
 
 `antenna probe` queues one standard, full-key node discovery request for nearby
@@ -708,12 +713,8 @@ TX attempts or delivery ratios. Queued probes use the normal dispatcher; no
 periodic requests, retries or new packet formats are introduced. Reset before
 changing antennas or radio settings; reboot also clears the statistics.
 
-ProMicro SX1262 builds compared with `250231b` use 1,680 additional flash bytes
-and 768 additional linked RAM bytes for companion; repeater uses 1,624 additional
-flash bytes and 704 additional linked RAM bytes. The collector itself is 728
-bytes in either role; linker alignment accounts for the linked RAM differences.
-Both ProMicro roles and RAK4631 companion compile successfully; RF hardware
-validation has not been performed.
+XIAO nRF52840 repeater, ProMicro repeater and RAK4631 companion builds pass;
+RF hardware validation has not been performed.
 
 ### 6.2 CompanionMesh
 
@@ -979,7 +980,7 @@ System (power): `poweroff`/`shutdown`, `get pwrmgt.support/source/bootreason/boo
 GPS: `gps`, `gps on/off/sync/setloc/advert`, `get gps`, `set gps duty <sec>`
 Sensors: `sensor get/set/list` (upstream's `SensorManager` settings: `gps`)
 Companion extras: `get|set autoshutdown`, `get|set v.contact`, `get|set v.batteryalert`, `help`
-Stats: `stats-core/stats-radio/stats-packets`, `clear stats`, local `antenna [<0..7>|probe|reset]`
+Stats: `stats-core/stats-radio/stats-packets`, `clear stats`, `antenna [<0..7>|probe|reset]`
 Time: `clock`, `clock sync`, `time <epoch>`, `set meshtimesync on/off`
 
 Full command reference with constraints and remote-admin restrictions: `CLI_commands.md`.

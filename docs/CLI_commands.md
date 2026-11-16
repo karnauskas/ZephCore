@@ -680,12 +680,15 @@ Bare IDs are recorded repeater path hash prefixes, not full public keys.
 Direct reception omits IDs; hop counts are omitted. Long paths end in `,...`.
 Observer and room-server firmware do not offer this command.
 
-### Antenna measurements (companion and repeater, local CLI)
+### Antenna measurements (companion and repeater)
 
 - `antenna` — show stored neighbour count and usage.
-- `antenna <0..7>` — show one neighbour's full public key, age in seconds,
+- `antenna <0..7>` — show one neighbour's public key, age in seconds,
   RX sample count, RSSI/SNR minimum/mean/maximum, and TX-direction sample count
   with remote SNR minimum/mean/maximum when available. RSSI is in dBm; SNR is in dB.
+  Each group ends with the mean's quality: `excellent`, `good`, `fair`, `weak` or
+  `poor`, using the pingbot scale above. For example:
+  `RSSI=-100/-95.00/-90(good) SNR=-0.25/1.12/2.50(good)`.
 - `antenna probe` — queue one zero-hop discovery request to nearby repeaters.
 - `antenna reset` — clear samples and cancel collection for the outstanding probe.
 
@@ -705,8 +708,10 @@ full-key responses for 60 seconds after queueing; starting another replaces it.
 
 Keep neighbours and radio settings fixed when comparing antennas. Reset before
 each antenna or radio change. Samples are lost on reboot and are independent of
-`clear stats`. Use the local USB CLI or, on companions, the app CLI/v-contact;
-remote mesh CLI access is not enabled for these commands.
+`clear stats`. Commands work through USB, the companion app CLI/v-contact, and
+authorized remote MeshCore CLI sessions. Remote replies show a four-byte key
+prefix and omit age to fit all readings and quality labels in the mesh reply;
+local replies show the full public key and age. Collection always measures the node executing the command.
 
 ### MQTT packet diagnostics
 
