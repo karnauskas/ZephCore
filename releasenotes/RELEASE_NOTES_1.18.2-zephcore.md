@@ -52,3 +52,18 @@ state.
 Public `!ping` replies now use `Pong @[Alice] -97(good)/-0.25(fair) ABCD,1234`
 after the normal sender prefix. RSSI/SNR have short quality hints, hop IDs have
 no labels or counts, and direct replies omit IDs.
+
+## Antenna measurement statistics
+
+Companions and repeaters now offer local CLI antenna measurements. Use
+`antenna reset`, `antenna probe`, then `antenna` and `antenna <0..7>` to compare
+direct neighbours. Up to eight neighbours have RSSI/SNR minimum, mean and maximum
+readings. Probe replies also report how the neighbour heard your transmission
+(SNR only). Statistics live in RAM and clear on reboot; probes run only on request.
+
+## Runtime TX-power changes
+
+Fixed radio replies stopping after `set tx`, including on the XIAO nRF52840.
+A changed power setting needs a full modem configuration; the common radio
+adapter now exits RX before that configuration, as required by the driver.
+Normal direction-only switches keep their existing fast path.

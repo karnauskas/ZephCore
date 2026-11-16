@@ -876,6 +876,36 @@
       "id": "UNIT-PJSON-019",
       "name": "Wardriving policy defaults allow and persists only in server JSON",
       "source": "tests/unit/prefs_json_tests.cpp"
+    },
+    {
+      "id": "UNIT-ANTENNA-001",
+      "name": "Antenna aggregates signed readings and excludes relayed and shared adverts",
+      "source": "tests/unit/antenna_stats_tests.cpp"
+    },
+    {
+      "id": "UNIT-ANTENNA-002",
+      "name": "Antenna accepts one full-key direct discovery response per probe within its window",
+      "source": "tests/unit/antenna_stats_tests.cpp"
+    },
+    {
+      "id": "UNIT-ANTENNA-003",
+      "name": "Antenna bounds storage by full identity and formats and resets safely",
+      "source": "tests/unit/antenna_stats_tests.cpp"
+    },
+    {
+      "id": "UNIT-ANTENNA-004",
+      "name": "Antenna probes use upstream zero-hop discovery and report pool exhaustion",
+      "source": "tests/unit/antenna_stats_tests.cpp"
+    },
+    {
+      "id": "UNIT-RADIOCFG-001",
+      "name": "Changing TX power cancels RX before configuring and preserves direction fast paths",
+      "source": "tests/unit/radio_config_tests.cpp"
+    },
+    {
+      "id": "UNIT-RADIOCFG-002",
+      "name": "Full RX configuration and loramac direction changes obey the driver state contract",
+      "source": "tests/unit/radio_config_tests.cpp"
     }
   ]
 }

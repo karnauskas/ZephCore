@@ -449,6 +449,12 @@ void LoRaRadio::configure(bool tx)
 			(int)cfg.coding_rate, cfg.tx_power);
 	}
 
+	/* A full modem configuration requires the driver to be out of RX. */
+	if (atomic_get(&_in_recv_mode)) {
+		hwCancelReceive();
+		atomic_set(&_in_recv_mode, 0);
+	}
+
 	if (hwConfigure(cfg)) {
 		_last_cfg = cfg;
 		_config_cached = true;

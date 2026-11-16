@@ -8,6 +8,12 @@ execute_process(COMMAND ${Python3_EXECUTABLE}
   "${CMAKE_CURRENT_LIST_DIR}/support/websocket_patch.py" "${WEBSOCKET_PATCH}"
   "${CMAKE_CURRENT_BINARY_DIR}/websocket_poll.inc" COMMAND_ERROR_IS_FATAL ANY)
 
+set(RADIO_CONFIG_SOURCE "${CMAKE_CURRENT_LIST_DIR}/../zephcore/adapters/radio/LoRaRadio.cpp")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${RADIO_CONFIG_SOURCE}")
+execute_process(COMMAND ${Python3_EXECUTABLE}
+  "${CMAKE_CURRENT_LIST_DIR}/support/radio_config_boundary.py" "${RADIO_CONFIG_SOURCE}"
+  "${CMAKE_CURRENT_BINARY_DIR}/radio_config.inc" COMMAND_ERROR_IS_FATAL ANY)
+
 option(ZEPHCORE_TEST_SANITIZERS "Enable host address/undefined behavior sanitizers" OFF)
 set(SX127X_PATCH "${CMAKE_CURRENT_LIST_DIR}/../zephcore/patches/zephyr/0021-sx127x-rssi-callback.patch")
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${SX127X_PATCH}")
@@ -18,6 +24,8 @@ set(PRODUCTION "${CMAKE_CURRENT_LIST_DIR}/../zephcore")
 add_executable(zephcore_unit
   unit/sx127x_table_tests.cpp
   unit/sx127x_rssi_tests.cpp
+  unit/radio_config_tests.cpp
+  unit/antenna_stats_tests.cpp
   unit/pingbot_tests.cpp
   ${PRODUCTION}/helpers/PingBot.cpp
   unit/websocket_poll_tests.cpp

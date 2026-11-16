@@ -14,6 +14,7 @@
 #include <helpers/RegionMap.h>
 #include <helpers/SensorManager.h>
 #include "NodePrefs.h"
+#include <helpers/AntennaStats.h>
 
 class MeshTimeSync;
 
@@ -34,6 +35,8 @@ class MeshTimeSync;
 class CommonCLICallbacks {
 public:
 	virtual bool savePrefs() = 0;
+	virtual AntennaStats* getAntennaStats() { return nullptr; }
+	virtual bool sendAntennaProbe() { return false; }
 	virtual void formatImmuneStatus(char *reply, size_t size) {
 		snprintf(reply, size, "unsupported");
 	}

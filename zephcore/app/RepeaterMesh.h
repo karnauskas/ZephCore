@@ -1,5 +1,7 @@
 #pragma once
 
+#include <helpers/AntennaStats.h>
+
 //#include <Arduino.h>
 #include <mesh/Mesh.h>
 // ZEPHCORE: Zephyr platform headers instead of RTClib, target.h and the
@@ -295,6 +297,11 @@ public:
 
   // ZEPHCORE: every radio family, not only LR2021 (the others report unsupported).
   bool configSideDetectors(const uint8_t* sfs, uint8_t num) override;
+
+  // ZEPHCORE: antenna measurements on the mesh thread.
+  AntennaStats antenna_stats;
+  AntennaStats* getAntennaStats() override { return &antenna_stats; }
+  bool sendAntennaProbe() override { return antenna_stats.probe(*this, k_uptime_get_32()); }
 
   // ZEPHCORE: CommonCLICallbacks additions.
   uint32_t getDefaultGpsIntervalSec() const override { return CONFIG_ZEPHCORE_REPEATER_GPS_INTERVAL_SEC; }

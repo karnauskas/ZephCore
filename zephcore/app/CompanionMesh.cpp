@@ -744,6 +744,7 @@ void CompanionMesh::onAdvertRecv(mesh::Packet *packet, const mesh::Identity &id,
 		_advert_prev.gps_lon = c->gps_lon;
 		memcpy(_advert_prev.name, c->name, sizeof(_advert_prev.name));
 	}
+	antenna_stats.advert(*packet, id.pub_key, (int)_radio->getLastRSSI(), k_uptime_get_32());
 	BaseChatMesh::onAdvertRecv(packet, id, timestamp, app_data, app_data_len);
 	_advert_prev.known = false;
 }
@@ -1541,6 +1542,7 @@ void CompanionMesh::onTraceRecv(mesh::Packet *packet, uint32_t tag, uint32_t aut
 /* Control data response - for repeater discovery, etc */
 void CompanionMesh::onControlDataRecv(mesh::Packet *packet)
 {
+	antenna_stats.discovery(*packet, (int)_radio->getLastRSSI(), k_uptime_get_32());
 	LOG_DBG("onControlDataRecv: payload_len=%d path_len=%d", packet->payload_len, packet->path_len);
 
 	// Buffer: [PUSH_CODE_CONTROL_DATA][snr*4][rssi][path_len][payload...]

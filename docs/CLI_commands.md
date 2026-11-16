@@ -467,7 +467,7 @@ four radio parameters together, since they are one interop-critical set.
 | `set repeat <on\|off>` | | Enable or disable packet forwarding. **Companion:** off-grid mode, the same as the display toggle ([OFFGRID.md](OFFGRID.md)), local only and applied at once. `on` moves the node to the nearest of 433.000 / 869.495 / 918.000 MHz and starts forwarding; `off` returns to the frequency it left. A node already on an off-grid frequency stays there both ways. BW, SF, CR and TX power are not touched; the frequency move resets the learned CAD offset. Replies `OK - repeat is now ON (869.495 MHz)`, or `Error: no off-grid frequency for this band` on a 2.4 GHz preset. `set radio` / `set freq` to any other frequency turns it off |
 | `set radio <freq>,<bw>,<sf>,<cr>` | freq 150–2500, bw 7–500 (7–1000 on LR2021), sf 5–12, cr 5–8 | **Comma-separated**, not space-separated — spaces parse as a single argument and the command is rejected. Set radio params *(reboot required)*. If freq, bw or sf actually changed, this also performs a full `set cad.reset` and replies `OK - reboot to apply (CAD reset)` — the learned detPeak offset and its probe statistics belong to the old preset. The radio keeps running the old preset, at its learned offset, until the reboot; CAD adaptation is suspended in the meantime so it cannot re-dirty the reset. A cr-only change resets nothing. |
 | `set freq <mhz>` | 150–2500 *(USB only)* | Set frequency alone *(reboot required)*. Same CAD reset as `set radio` when the frequency actually changes. On LR2021 boards a frequency at or above 1500 MHz also moves the radio to its 2.4 GHz front end — see the note below the table. |
-| `set tx <dbm>` | −9 to board max (default 30) | Set TX power |
+| `set tx <dbm>` | −9 to board max (default 30) | Set TX power; used by the next transmission, without reboot |
 | `set lat <latitude>` | | Set stored latitude |
 | `set lon <longitude>` | | Set stored longitude |
 | `set dutycycle <pct>` | 10–100 | Set duty cycle percentage (converted to airtime factor internally as `(100/pct)-1`). The floor is 10%, not Arduino's 1%: the stored airtime factor is bounded to 0–9 on load, so a lower duty cycle would run until the next reboot and then silently become 10%. |
@@ -679,6 +679,34 @@ the noise floor, with limits depending on spreading factor and bandwidth. See
 Bare IDs are recorded repeater path hash prefixes, not full public keys.
 Direct reception omits IDs; hop counts are omitted. Long paths end in `,...`.
 Observer and room-server firmware do not offer this command.
+
+### Antenna measurements (companion and repeater, local CLI)
+
+- `antenna` — show stored neighbour count and usage.
+- `antenna <0..7>` — show one neighbour's full public key, age in seconds,
+  RX sample count, RSSI/SNR minimum/mean/maximum, and TX-direction sample count
+  with remote SNR minimum/mean/maximum when available. RSSI is in dBm; SNR is in dB.
+- `antenna probe` — queue one zero-hop discovery request to nearby repeaters.
+- `antenna reset` — clear samples and cancel collection for the outstanding probe.
+
+Example measurement sequence: `antenna reset`, `antenna probe`, then `antenna`
+and `antenna 0` (and other occupied indices). Repeat probes manually for more
+samples; replies may take time because of contention and discovery rate limits.
+
+The eight-entry RAM table collects direct verified adverts and replies to your
+latest probe. New identities replace the oldest inserted entries when full.
+RX measures reception at your node; TX SNR is how the neighbour heard your
+probe. TX counts neighbour reports, not transmissions. Remote RSSI is unavailable
+in the existing discovery protocol; `TX=0` means no reports, not failed delivery.
+Discovery replies are unsigned, and hidden or forwarding-disabled repeaters may
+not respond. Companions contribute adverts but do not answer discovery requests.
+Relayed packets and replayed share adverts are excluded. A probe accepts matching
+full-key responses for 60 seconds after queueing; starting another replaces it.
+
+Keep neighbours and radio settings fixed when comparing antennas. Reset before
+each antenna or radio change. Samples are lost on reboot and are independent of
+`clear stats`. Use the local USB CLI or, on companions, the app CLI/v-contact;
+remote mesh CLI access is not enabled for these commands.
 
 ### MQTT packet diagnostics
 

@@ -463,6 +463,19 @@ void CommonCLI::handleCommand(uint32_t sender_timestamp, const char* command, ch
 	} else if (_region_map && memcmp(command, "region", 6) == 0) {
 		handleRegionCmdCopy(sender_timestamp, command, reply);
 #endif
+	// ZEPHCORE: local antenna-test diagnostics, shared by companion and repeater.
+	} else if (strcmp(command, "antenna") == 0 || strncmp(command, "antenna ", 8) == 0) {
+		auto *stats = _callbacks->getAntennaStats();
+		if (sender_timestamp != 0) {
+			snprintf(reply, replyCap(sender_timestamp), "Local command only");
+		} else if (!stats) {
+			snprintf(reply, replyCap(sender_timestamp), "not available");
+		} else if (strcmp(command, "antenna probe") == 0) {
+			snprintf(reply, replyCap(sender_timestamp), "%s",
+				_callbacks->sendAntennaProbe() ? "OK - antenna probe queued" : "Err - packet pool full");
+		} else {
+			stats->command(command, reply, replyCap(sender_timestamp), k_uptime_get_32());
+		}
 	} else if (memcmp(command, "neighbors", 9) == 0) {
 		_callbacks->formatNeighborsReply(reply);
 	} else if (memcmp(command, "neighbor.remove ", 16) == 0) {

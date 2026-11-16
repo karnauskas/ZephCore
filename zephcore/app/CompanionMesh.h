@@ -5,6 +5,8 @@
 
 #pragma once
 
+#include <helpers/AntennaStats.h>
+
 #include <helpers/BaseChatMesh.h>
 #include <helpers/BaseSerialInterface.h>
 #include <helpers/MeshTimeSync.h>
@@ -92,6 +94,7 @@ typedef void (*CompanionCLICallback)(const char *command, uint32_t sender_timest
 
 class CompanionMesh : public BaseChatMesh, public DataStoreHost {
 public:
+	AntennaStats antenna_stats;
 	CompanionMesh(mesh::Radio &radio, mesh::MillisecondClock &ms, mesh::RNG &rng,
 		mesh::RTCClock &rtc, mesh::PacketManager &mgr, mesh::MeshTables &tables,
 		ZephyrDataStore &store);

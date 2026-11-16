@@ -789,6 +789,8 @@ static bool isShare(const mesh::Packet *packet) {
 // ZEPHCORE: ours. Feeds the mesh time sync.
 void RepeaterMesh::onAdvertRecv(mesh::Packet* packet, const mesh::Identity& id, uint32_t timestamp,
         const uint8_t* app_data, size_t app_data_len) {
+  // ZEPHCORE: only identified, direct neighbours contribute antenna samples.
+  antenna_stats.advert(*packet, id.pub_key, (int)_radio->getLastRSSI(), k_uptime_get_32());
   mesh::Mesh::onAdvertRecv(packet, id, timestamp, app_data, app_data_len);
 
   /* Signature already verified by mesh::Mesh before this hook fires.
@@ -935,6 +937,8 @@ bool RepeaterMesh::onPeerPathRecv(mesh::Packet *packet, int sender_idx, const ui
 #define CTL_TYPE_NODE_DISCOVER_RESP  0x90
 
 void RepeaterMesh::onControlDataRecv(mesh::Packet* packet) {
+  // ZEPHCORE: correlate antenna probes independently of neighbour discovery.
+  antenna_stats.discovery(*packet, (int)_radio->getLastRSSI(), k_uptime_get_32());
   uint8_t type = packet->payload[0] & 0xF0;    // just test upper 4 bits
   if (type == CTL_TYPE_NODE_DISCOVER_REQ && packet->payload_len >= 6
       && !_prefs.disable_fwd && discover_limiter.allow(rtc_clock.getCurrentTime())

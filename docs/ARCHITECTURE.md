@@ -410,7 +410,12 @@ Compile-time selection via the `CONFIG_ZEPHCORE_RADIO_NATIVE` / `_LR1110` / `_LR
 2. ISR writes to 8-slot SPSC ring buffer (drops NEW packet on overflow).
 3. Main thread drains via `recvRaw()`.
 
-**Config Caching**: Avoids redundant `lora_config()` calls. Fast-path for TX↔RX transitions when only direction differs. `recoverRxState()` clears the cache (`_config_cached = false`) so post-recovery RX goes through the full path.
+**Config Caching**: Avoids redundant `lora_config()` calls. Fast-path for TX↔RX
+transitions when only direction differs. A full configuration cancels active RX
+and clears the adapter RX flag before programming the modem: driver configuration
+requires REST, including when a changed TX-power preference is applied to the
+next transmission. `recoverRxState()` clears the cache (`_config_cached = false`)
+so post-recovery RX goes through the full path.
 
 ### 5.2.1 RX-Busy Gate (TX-during-RX prevention)
 
@@ -679,6 +684,37 @@ budget truncates whole hop IDs with `,...`. Repeater responses use the
 request's region scope through `sendFloodReply`; companions use channel scope.
 Observers remain listen-only; room servers do not run pingbot.
 
+### Antenna measurement statistics
+
+Companion and repeater roles share `helpers/AntennaStats.h`. Local CLI commands
+`antenna`, `antenna <0..7>`, `antenna probe` and `antenna reset` inspect or clear
+an eight-entry FIFO keyed by full public keys. The collector uses 728 bytes of
+static RAM per role on nRF52840, no heap or background polling, and no persistent
+settings.
+
+RX samples come from verified, zero-hop, non-share adverts and matched zero-hop
+discovery responses. Arbitrary packets cannot reliably identify their immediate
+transmitter and do not contribute. Each entry holds counts, RSSI/SNR minimum,
+mean and maximum, plus last-received monotonic time. Discovery responses are
+unsigned; their claimed identity and remote SNR are diagnostic, not authenticated.
+
+`antenna probe` queues one standard, full-key node discovery request for nearby
+repeaters. Responses must echo its tag, contain a full key and arrive within
+60 seconds of queueing; a new probe replaces the previous outstanding tag.
+Repeated responses from a retained identity count once per probe. Responses add
+local RX readings and the neighbour's reported inbound SNR as a TX-direction
+sample. The wire protocol carries no remote RSSI. Counts represent samples, not
+TX attempts or delivery ratios. Queued probes use the normal dispatcher; no
+periodic requests, retries or new packet formats are introduced. Reset before
+changing antennas or radio settings; reboot also clears the statistics.
+
+ProMicro SX1262 builds compared with `250231b` use 1,680 additional flash bytes
+and 768 additional linked RAM bytes for companion; repeater uses 1,624 additional
+flash bytes and 704 additional linked RAM bytes. The collector itself is 728
+bytes in either role; linker alignment accounts for the linked RAM differences.
+Both ProMicro roles and RAK4631 companion compile successfully; RF hardware
+validation has not been performed.
+
 ### 6.2 CompanionMesh
 
 **Location privacy**: `helpers/PrivacyEngine` filters the companion's own advert
@@ -943,7 +979,7 @@ System (power): `poweroff`/`shutdown`, `get pwrmgt.support/source/bootreason/boo
 GPS: `gps`, `gps on/off/sync/setloc/advert`, `get gps`, `set gps duty <sec>`
 Sensors: `sensor get/set/list` (upstream's `SensorManager` settings: `gps`)
 Companion extras: `get|set autoshutdown`, `get|set v.contact`, `get|set v.batteryalert`, `help`
-Stats: `stats-core/stats-radio/stats-packets`, `clear stats`
+Stats: `stats-core/stats-radio/stats-packets`, `clear stats`, local `antenna [<0..7>|probe|reset]`
 Time: `clock`, `clock sync`, `time <epoch>`, `set meshtimesync on/off`
 
 Full command reference with constraints and remote-admin restrictions: `CLI_commands.md`.

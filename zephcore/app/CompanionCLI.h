@@ -31,6 +31,9 @@ public:
 		: _store(store), _mesh(mesh), _radio(radio), _board(board), _ms(ms), _pool(pool),
 		  _tx_idle(tx_idle) {}
 
+	AntennaStats* getAntennaStats() override { return &_mesh.antenna_stats; }
+	bool sendAntennaProbe() override { return _mesh.antenna_stats.probe(_mesh, k_uptime_get_32()); }
+
 	bool savePrefs() override {
 		return _store.savePrefs(_mesh.prefs);
 	}
