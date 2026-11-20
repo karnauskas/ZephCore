@@ -390,6 +390,7 @@ target_sources(app PRIVATE
   helpers/MeshTimeSync.cpp
   helpers/PowerBudget.cpp
   helpers/PingBot.cpp
+  helpers/ForwardFilter.cpp
   # Captures the reset cause before anything consumes it; every role needs it
   # at boot, so it is never conditional.
   helpers/boot_info.c

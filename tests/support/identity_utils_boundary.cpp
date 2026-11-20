@@ -36,9 +36,6 @@ void mesh::Utils::printHex(Stream &s, const uint8_t *src, size_t len) {
 void mesh::Utils::secureZeroize(void*, size_t) {
     throw std::runtime_error("Identity RNG/recovery path requires real Utils integration");
 }
-bool mesh::Utils::constantTimeEqual(const void*, const void*, size_t) {
-    throw std::runtime_error("Identity validation requires real Utils integration");
-}
 // KissModem's hash and encrypt/decrypt commands (not exercised by its tests;
 // the one-fragment sha256 is hash_capture.cpp's).
 void mesh::Utils::sha256(uint8_t*, size_t, const uint8_t*, int, const uint8_t*, int) {

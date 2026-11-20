@@ -186,6 +186,15 @@ int Utils::encryptThenMAC(const uint8_t *shared_secret, uint8_t *dest, const uin
 	return CIPHER_MAC_SIZE + enc_len;
 }
 
+bool Utils::verifyMAC(const uint8_t *shared_secret, const uint8_t *src, int src_len)
+{
+	if (src_len <= (int)CIPHER_MAC_SIZE || (src_len - CIPHER_MAC_SIZE) % CIPHER_BLOCK_SIZE) return false;
+	uint8_t mac[CIPHER_MAC_SIZE];
+	if (compute_hmac_truncated(shared_secret, PUB_KEY_SIZE, src + CIPHER_MAC_SIZE,
+		(size_t)(src_len - CIPHER_MAC_SIZE), mac, sizeof(mac))) return false;
+	return Utils::constantTimeEqual(mac, src, sizeof(mac));
+}
+
 int Utils::MACThenDecrypt(const uint8_t *shared_secret, uint8_t *dest, const uint8_t *src, int src_len)
 {
 	if (src_len <= (int)CIPHER_MAC_SIZE) return 0;

@@ -75,6 +75,9 @@ protected:
 	{
 		def("radio_good", _recovery);
 		def("pingbot", _p->pingbot);
+		def("filter_1byte", _p->forward_filters.one_byte);
+		def("filter_data", _p->forward_filters.data);
+		def("filter_public", _p->forward_filters.public_channel);
 		def("power_budget", _p->adaptive_power);
 		def("immune", _p->immune);
 		def("winter", _p->winter);

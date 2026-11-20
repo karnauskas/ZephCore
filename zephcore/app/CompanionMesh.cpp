@@ -122,8 +122,7 @@ void CompanionMesh::begin()
 
 bool CompanionMesh::allowPacketForward(const mesh::Packet *packet)
 {
-	(void)packet;
-	return mesh::offgridActive(prefs);
+	return mesh::offgridActive(prefs) && allowFilteredForward(packet, prefs.forward_filters);
 }
 
 bool CompanionMesh::isOffgridActive() const
@@ -1031,7 +1030,7 @@ void CompanionMesh::onCLICommandRecv(const ContactInfo &contact, mesh::Packet *p
 }
 
 /* Remote CLI requires contact flag 0x10. It exposes upstream companion
- * commands and antenna diagnostics; other ZephCore-only commands stay local. */
+ * commands, antenna diagnostics and forwarding filters; other commands stay local. */
 static bool isRemoteCompanionCommand(const char *cmd)
 {
 	static const char *const exact[] = {
@@ -1040,14 +1039,14 @@ static bool isRemoteCompanionCommand(const char *cmd)
 		"get path.hash.mode", "get multi.acks", "get txdelay", "get direct.txdelay",
 		"reboot", "poweroff", "shutdown", "get name", "get wifi.pwd", "set wifi.clear",
 		"get wifi.ssid", "get wifi.enabled", "get wifi.status", "get wifi.ip",
-		"board", "ver", "get tz.offset", "antenna",
+		"board", "ver", "get tz.offset", "antenna", "filter",
 	};
 	static const char *const prefix[] = {
 		"set radio ", "set af ", "set dutycycle ", "set int.thresh ", "set cad ",
 		"set radio.rxgain ", "get tx ", "set tx ", "set rxdelay ", "set agc.reset.interval ",
 		"set path.hash.mode ", "set multi.acks ", "set txdelay ", "set direct.txdelay ",
 		"set name ", "set pin ", "set wifi.ssid ", "set wifi.pwd ", "set wifi.enabled ",
-		"set tz.offset ", "antenna ",
+		"set tz.offset ", "antenna ", "filter ",
 	};
 	for (const char *e : exact) {
 		if (strcmp(cmd, e) == 0) return true;

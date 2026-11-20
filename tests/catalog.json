@@ -946,6 +946,26 @@
       "id": "UNIT-MQTT-014",
       "name": "Broker clients select TCP TLS and WebSocket sockets and preserve preset authentication policies",
       "source": "tests/unit/mqtt_tests.cpp"
+    },
+    {
+      "id": "UNIT-FILTER-001",
+      "name": "Forwarding filters cover payload routes path sizes and zero-hop boundaries",
+      "source": "tests/unit/forward_filter_tests.cpp"
+    },
+    {
+      "id": "UNIT-FILTER-002",
+      "name": "Public filtering verifies MACs without decrypting and preserves hash collisions",
+      "source": "tests/unit/forward_filter_tests.cpp"
+    },
+    {
+      "id": "UNIT-FILTER-003",
+      "name": "Filter CLI responses persistence failures and invalid arguments preserve settings",
+      "source": "tests/unit/forward_filter_tests.cpp"
+    },
+    {
+      "id": "UNIT-PJSON-021",
+      "name": "Forwarding filter defaults saved choices binary compatibility and remote commands",
+      "source": "tests/unit/prefs_json_tests.cpp"
     }
   ]
 }

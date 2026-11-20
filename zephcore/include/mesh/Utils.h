@@ -49,6 +49,9 @@ public:
   */
   static int encryptThenMAC(const uint8_t* shared_secret, uint8_t* dest, const uint8_t* src, int src_len);
 
+  // ZEPHCORE: authenticate block-aligned ciphertext without decrypting it.
+  static bool verifyMAC(const uint8_t* shared_secret, const uint8_t* src, int src_len);
+
   /**
    * \brief  checks the MAC (in leading bytes of 'src'), then if valid, decrypts remaining bytes in src.
    * \returns  zero if MAC is invalid or ciphertext is not block-aligned, otherwise the length of decrypted bytes in 'dest'

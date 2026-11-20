@@ -2,6 +2,11 @@ cmake_minimum_required(VERSION 3.20)
 project(zephcore_host_tests LANGUAGES C CXX)
 
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
+set(MAC_SOURCE "${CMAKE_CURRENT_LIST_DIR}/../zephcore/src/Utils.cpp")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${MAC_SOURCE}")
+execute_process(COMMAND ${Python3_EXECUTABLE}
+  "${CMAKE_CURRENT_LIST_DIR}/support/mac_boundary.py" "${MAC_SOURCE}"
+  "${CMAKE_CURRENT_BINARY_DIR}/mac_validation.inc" COMMAND_ERROR_IS_FATAL ANY)
 set(WEBSOCKET_PATCH "${CMAKE_CURRENT_LIST_DIR}/../zephcore/patches/zephyr/0020-websocket-buffered-poll.patch")
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${WEBSOCKET_PATCH}")
 execute_process(COMMAND ${Python3_EXECUTABLE}
@@ -28,6 +33,9 @@ execute_process(COMMAND ${Python3_EXECUTABLE}
   "${CMAKE_CURRENT_BINARY_DIR}/sx127x_table.inc" COMMAND_ERROR_IS_FATAL ANY)
 set(PRODUCTION "${CMAKE_CURRENT_LIST_DIR}/../zephcore")
 add_executable(zephcore_unit
+  unit/forward_filter_tests.cpp
+  support/mac_boundary.cpp
+  ${PRODUCTION}/helpers/ForwardFilter.cpp
   unit/sx127x_table_tests.cpp
   unit/sx127x_rssi_tests.cpp
   unit/radio_config_tests.cpp

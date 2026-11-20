@@ -810,3 +810,32 @@ hashtag key, so unrelated channels sharing its one-byte hash are unaffected.
 Both group text and group data are covered. Direct routing is unchanged.
 `repeat.all` does not bypass this channel policy; normal region and hop filters
 still apply to permitted traffic.
+
+### Forwarding filters (repeater and off-grid companion)
+
+Available locally and over authorized remote CLI (repeater admin; companion
+contact permission `0x10`). Filters apply to forwarded packets, preserving local
+reception and locally generated traffic. Rooms and observers do not forward and
+do not expose these commands.
+
+| Command | Default | Behavior |
+| --- | --- | --- |
+| `filter` | | Reports `> 1byte off, data on, public off` with current values |
+| `filter 1byte [on\|off]` | off | Blocks one-byte path-hash floods after at least one hop; allows zero-hop floods, larger path hashes and direct traffic |
+| `filter data [on\|off]` | on | Blocks forwarding `GRP_DATA` (`0x06`), reserved types `0x0C`–`0x0E`, and `RAW_CUSTOM` (`0x0F`) |
+| `filter public [on\|off]` | off | Blocks Public-channel `GRP_TXT` and `GRP_DATA` after hash and MAC verification |
+
+Without `on`/`off`, a single-filter command replies `> filter data on` (for example).
+Changes reply `OK - filter data off`, apply immediately, and save in `prefs.json`.
+Values are case-insensitive. A failed save restores the previous setting and
+replies `Error - could not save filter settings`. Existing saved choices,
+including `data off`, survive upgrades. Missing values use the defaults above.
+
+Public-channel filtering checks hash `0x11` and the published channel key's
+two-byte MAC without decrypting the message. A matching hash alone is not blocked;
+a colliding MAC still has the protocol's 1-in-65,536 false-match possibility.
+To forward group data, disable `data`; `public` can then block just Public group
+data. Disabling filters does not enable unsupported payload routing or bypass
+region, hop, loop, duplicate, `repeat off` or wardriving policies. `repeat.all`
+does not bypass these filters. Other SaveMeshcore restrictions on radio and advert
+settings are outside this integration.

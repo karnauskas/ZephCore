@@ -13,6 +13,7 @@
 #include "LoRaConfig.h"
 #include "RadioCheckpoint.h"
 #include "PrivacyEngine.h"
+#include "ForwardFilter.h"
 
 /* LEDS_RADIO_* / LEDS_HB_* mode values for the leds_radio_mode and leds_hb_mode
  * fields below.  They live in led_gate.h because the heartbeat consumers are C
@@ -71,6 +72,7 @@ struct ObserverCreds;
 struct NodePrefs {
 	ObserverCreds *uplink_creds; // Runtime binding for JSON-only network settings.
 	PrivacyPrefs privacy; // JSON-only companion location policy
+	ForwardFilters forward_filters; // JSON-only forwarding policy
 	RadioCheckpoint radio_checkpoint; // JSON-only startup recovery state
 	/* ---- Common fields (both roles) ---- */
 	float airtime_factor;
@@ -326,6 +328,9 @@ static inline void sanitizeNodePrefs(NodePrefs* p) {
 	p->leds_hb_mode        = saneEnum(p->leds_hb_mode, LEDS_HB_MAX);
 	p->led_brightness      = clampPref<uint8_t>(p->led_brightness, 0, 100);
 	p->pingbot = saneBool<uint8_t>(p->pingbot, 0);
+	p->forward_filters.one_byte = saneBool<uint8_t>(p->forward_filters.one_byte, 0);
+	p->forward_filters.data = saneBool<uint8_t>(p->forward_filters.data, 1);
+	p->forward_filters.public_channel = saneBool<uint8_t>(p->forward_filters.public_channel, 0);
 	p->adaptive_power = saneBool<uint8_t>(p->adaptive_power, 0);
 	p->immune = saneBool<uint8_t>(p->immune, 0);
 	p->winter = saneBool<uint8_t>(p->winter, 0);
@@ -400,6 +405,7 @@ static inline void sanitizeNodePrefs(NodePrefs* p) {
 
 static inline void initNodePrefs(NodePrefs* prefs) {
 	memset(prefs, 0, sizeof(NodePrefs));
+	prefs->forward_filters.data = 1;
 	prefs->airtime_factor = 9.0f;  /* Arduino formula: duty% = 100 / (af + 1) → 10% */
 	prefs->node_lat = 0.0;
 	prefs->node_lon = 0.0;

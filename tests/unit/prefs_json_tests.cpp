@@ -7,6 +7,7 @@
 
 #include <cstring>
 #include <string>
+#include "companion_cli.inc"
 
 namespace {
 
@@ -444,4 +445,31 @@ TEST(pjson_mqtt, "UNIT-PJSON-020", "MQTT credentials and independent slots round
 	MemStream old("{}");
 	CHECK(serverPrefsFromJson(node, old));
 	CHECK(!strcmp(loaded.slots[1].preset, "inwmesh"));
+}
+
+TEST(pjson_filters, "UNIT-PJSON-021", "Forwarding filter defaults saved choices binary compatibility and remote commands") {
+    for (bool server : {false, true}) {
+        NodePrefs original = defaults(), loaded = defaults();
+        uint8_t before[SERVER_PREFS_SIZE], after[SERVER_PREFS_SIZE];
+        size_t n = server ? serverPrefsEncode(original, before, sizeof(before)) : companionPrefsEncode(original, before, sizeof(before));
+        original.forward_filters = {1,0,1};
+        size_t m = server ? serverPrefsEncode(original, after, sizeof(after)) : companionPrefsEncode(original, after, sizeof(after));
+        CHECK(n == m && !memcmp(before, after, n));
+        MemStream out;
+        CHECK(server ? serverPrefsToJson(original, out) : companionPrefsToJson(original, out));
+        CHECK(server ? serverPrefsFromJson(loaded, out) : companionPrefsFromJson(loaded, out));
+        CHECK(loaded.forward_filters.one_byte && !loaded.forward_filters.data && loaded.forward_filters.public_channel);
+        MemStream missing("{}"); loaded = defaults();
+        CHECK(server ? serverPrefsFromJson(loaded, missing) : companionPrefsFromJson(loaded, missing));
+        CHECK(!loaded.forward_filters.one_byte && loaded.forward_filters.data && !loaded.forward_filters.public_channel);
+        MemStream explicit_off("{zc:{filter_data:0}}");
+        CHECK(server ? serverPrefsFromJson(loaded, explicit_off) : companionPrefsFromJson(loaded, explicit_off));
+        CHECK(!loaded.forward_filters.data);
+        MemStream bad("{zc:{filter_data:1},");
+        CHECK(!(server ? serverPrefsFromJson(loaded, bad) : companionPrefsFromJson(loaded, bad)));
+        CHECK(!loaded.forward_filters.data);
+    }
+    for (const char *cmd : {"filter", "filter data", "filter data off", "filter public on", "filter 1byte on"})
+        CHECK(isRemoteCompanionCommand(cmd));
+    CHECK(!isRemoteCompanionCommand("filtering"));
 }

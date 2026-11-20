@@ -573,6 +573,8 @@ void RepeaterMesh::sendFloodReply(mesh::Packet* packet, unsigned long delay_mill
 
 bool RepeaterMesh::allowPacketForward(const mesh::Packet *packet) {
   if (_prefs.disable_fwd) return false;
+  // ZEPHCORE: forwarding-only filters, shared with off-grid companions.
+  if (!allowFilteredForward(packet, _prefs.forward_filters)) return false;
   if (packet->isRouteFlood()
       && mesh::isFloodHopLimitExceeded(packet, _prefs.flood_max, _prefs.flood_max_unscoped, _prefs.flood_max_advert, _prefs.repeat_all)) {
     return false;

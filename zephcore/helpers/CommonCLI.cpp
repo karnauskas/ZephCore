@@ -334,6 +334,10 @@ void CommonCLI::scheduleReboot(uint8_t type)
  * not fold the input buffer: a value can be the second token (`password
  * <value>`). */
 void CommonCLI::handleCommand(uint32_t sender_timestamp, const char* command, char* reply) {
+#if defined(CONFIG_ZEPHCORE_ROLE_REPEATER) || defined(CONFIG_ZEPHCORE_ROLE_COMPANION)
+	if (handleForwardFilterCommand(_prefs->forward_filters, command, reply, replyCap(sender_timestamp),
+		[this]() { return _callbacks->savePrefs(); })) return;
+#endif
 	if (handleRadioCmd(sender_timestamp, command, reply)) {  // is a radio CLI command?
 		return;
 	}

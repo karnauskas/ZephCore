@@ -920,6 +920,25 @@ Autonomous operation features:
 - **Temporary radio params**: `tempradio` command applies freq/bw/sf/cr via `LoRaRadio::setRadioOverride()` (does not mutate `_prefs`); auto-revert timer calls `clearRadioOverride()` to fall back to saved prefs
 - **WiFi+MQTT uplink** (ESP32, `CONFIG_ZEPHCORE_REPEATER_UPLINK`): `RepeaterUplink.cpp` reports packets observer-style while still repeating; configured via `set uplink.*` CLI
 
+Forwarding filters (`helpers/ForwardFilter.*`) are shared with companion off-grid
+forwarding and run in each role's `allowPacketForward` hook. `1byte` (default off)
+blocks one-byte-hash floods after at least one hop; `data` (default on) blocks
+`GRP_DATA`, reserved `0x0C`–`0x0E`, and `RAW_CUSTOM`; `public` (default off) blocks
+Public-channel group text/data. Public identification first checks hash `0x11`,
+then verifies the two-byte HMAC against the published key without decrypting.
+Colliding channel hashes pass unless their MAC also collides (1 in 65,536).
+`Utils::verifyMAC` shares the existing HMAC backend and checks ciphertext framing.
+The filters do not change local delivery, locally originated transmissions, radio
+reception or MQTT reporting. Region/hop/loop checks still apply; `repeat.all`
+does not bypass these filters. Rooms and observers remain non-forwarding.
+
+Three preference bytes in `NodePrefs` persist under `zc.filter_1byte`,
+`zc.filter_data` and `zc.filter_public`; absent keys keep defaults, explicit saved
+values survive upgrades, and legacy binary codecs are unchanged. `CommonCLI`
+exposes `filter` commands for repeater and companion, using their existing remote
+authorization. Changed settings save immediately and roll back on save failure.
+No packet-path heap allocation is added. See [ADR 0020](adr/0020-forwarding-filters.md).
+
 ### 6.4 RoomServerMesh
 
 Headless store-and-forward shared message room (BBS). Clients log in with the admin or guest password and post messages; the server pushes each new post to every other logged-in client (per-client sync cursor + ACK). Reuses the repeater's ACL, region filtering, and USB CLI, and its composition root: `main_room_server.cpp` hands `server_main_common.cpp` a `ServerRole`, so the room runs the repeater's deadline-driven loop, where the post push engine is one more deadline (`RoomServerMesh::msUntilNextPush()`). Build with `boards/common/room_server.conf`.

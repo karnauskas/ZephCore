@@ -82,3 +82,14 @@ available SRAM/PSRAM resources; query `get mqtt.capacity` on the running build.
 Existing single-broker credentials migrate into `prefs.json` and keep their
 primary connection. Fresh observers default to the Let's Mesh US/EU presets.
 The observer remains listen-only. Hardware multi-session validation is pending.
+
+## Forwarding filters
+
+Repeaters and off-grid companions now support `filter`, `filter 1byte on|off`,
+`filter data on|off` and `filter public on|off` through local and authorized remote
+CLI. Defaults are `1byte off`, `data on`, `public off`: group data and reserved/raw
+payloads are no longer forwarded by default; use `filter data off` to restore
+their previous forwarding policy. Public filtering authenticates the channel MAC
+without decrypting and preserves unrelated channels sharing its hash byte.
+Choices save immediately in `prefs.json` and survive upgrades. Local reception
+is unchanged; rooms and observers remain non-forwarding.
