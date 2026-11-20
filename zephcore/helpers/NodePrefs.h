@@ -67,7 +67,9 @@
  * ConfigureSideDetectors limit of 3. */
 #define EXTRA_SF_MAX    3
 
+struct ObserverCreds;
 struct NodePrefs {
+	ObserverCreds *uplink_creds; // Runtime binding for JSON-only network settings.
 	PrivacyPrefs privacy; // JSON-only companion location policy
 	RadioCheckpoint radio_checkpoint; // JSON-only startup recovery state
 	/* ---- Common fields (both roles) ---- */

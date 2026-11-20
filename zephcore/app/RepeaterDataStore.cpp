@@ -4,6 +4,9 @@
  */
 
 #include "RepeaterDataStore.h"
+#if defined(CONFIG_MQTT_LIB)
+#include "observer_creds.h"
+#endif
 #include "../adapters/datastore/ZephyrFsFormat.h"
 #include "../adapters/datastore/ZephyrFsUtil.h"
 #include "../adapters/datastore/IdentityFile.h"
@@ -76,6 +79,9 @@ bool RepeaterDataStore::saveIdentity(const mesh::LocalIdentity& id) {
 }
 
 bool RepeaterDataStore::loadPrefs(NodePrefs& prefs) {
+#if defined(CONFIG_MQTT_LIB)
+	if (prefs.uplink_creds) observer_creds_load(prefs.uplink_creds, BASE_PATH);
+#endif
 	char path[48];
 	snprintf(path, sizeof(path), "%s/prefs.json", BASE_PATH);
 

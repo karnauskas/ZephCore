@@ -27,7 +27,7 @@
 bool RepeaterMesh::saveUplinkCreds()
 {
 	if (!_store) return false;
-	return observer_creds_save(&_uplink_creds, _store->getBasePath());
+	return observer_creds_save(&_uplink_creds, _store->getBasePath(), &_prefs);
 }
 
 bool RepeaterMesh::handleUplinkCommand(const char *command, char *reply)
@@ -108,6 +108,11 @@ bool RepeaterMesh::handleUplinkCommand(const char *command, char *reply)
 			return true;
 		}
 
+		if ((key_len == 9 && (!memcmp(cfg, "mqtt.host", 9) || !memcmp(cfg, "mqtt.port", 9))) ||
+		    (key_len == 8 && !memcmp(cfg, "mqtt.tls", 8))) {
+			_uplink_creds.mqtt_configured = 0;
+			mqtt_migrate_legacy(&_uplink_creds);
+		}
 		if (!saveUplinkCreds()) {
 			strcpy(reply, "Error: save failed");
 			return true;
@@ -158,7 +163,7 @@ void RepeaterMesh::publishUplinkPacket(mesh::Packet *pkt)
 	if (json_len <= 0 || json_len >= (int)json_cap) {
 		return;
 	}
-	mqtt_publisher_commit(MQTT_PUB_TOPIC_PACKETS, json_len);
+	mqtt_publisher_commit_packet(pkt->getPayloadType(), json_len);
 }
 
 void RepeaterMesh::publishUplinkStatus(const char *status)

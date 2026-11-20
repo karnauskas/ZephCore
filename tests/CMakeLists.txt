@@ -40,6 +40,9 @@ add_executable(zephcore_unit
   ${PRODUCTION}/helpers/ui/observer_text.cpp
   unit/led_lifecycle_tests.cpp
   ${PRODUCTION}/helpers/MqttAuth.cpp
+    ${PRODUCTION}/helpers/MqttConfig.c
+    ${PRODUCTION}/helpers/MqttPresets.c
+  unit/mqtt_config_tests.cpp
   unit/mqtt_tests.cpp
   support/mqtt_publisher_boundary.c
   unit/main.cpp
@@ -89,7 +92,7 @@ add_executable(zephcore_unit
   ${PRODUCTION}/app/KissModem.cpp
 )
 target_compile_features(zephcore_unit PRIVATE cxx_std_17)
-target_compile_definitions(zephcore_unit PRIVATE CONFIG_ZEPHCORE_PACKET_LOGGING=0
+target_compile_definitions(zephcore_unit PRIVATE CONFIG_MBEDTLS_HAVE_TIME_DATE=1 CONFIG_MAX_TOKEN_LEN=256 CONFIG_ZEPHCORE_PACKET_LOGGING=0
   CONFIG_ZEPHCORE_UI_DESIGN_JOYSTICK=1 CONFIG_ZEPHCORE_UI_DESIGN_BUTTON=0)
 set_source_files_properties(unit/sx127x_rssi_tests.cpp PROPERTIES
   INCLUDE_DIRECTORIES "${CMAKE_CURRENT_LIST_DIR}/support/radio_ops")

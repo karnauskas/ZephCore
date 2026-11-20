@@ -90,3 +90,13 @@ TEST(mqtt_full_status, "UNIT-MQTT-009", "MQTT full status includes signed noise 
 	CHECK(strstr(json, "\"rx_air_secs\":42") != nullptr);
 	CHECK(strstr(json, "\"recv_errors\":3") != nullptr);
 }
+
+extern "C" int test_mqtt_multiple(void);
+TEST(mqtt_multiple, "UNIT-MQTT-013", "Independent broker workers isolate connection failures full queues and packet filters") {
+	CHECK(test_mqtt_multiple());
+}
+
+extern "C" int test_mqtt_transports(void);
+TEST(mqtt_transports, "UNIT-MQTT-014", "Broker clients select TCP TLS and WebSocket sockets and preserve preset authentication policies") {
+	CHECK(test_mqtt_transports());
+}

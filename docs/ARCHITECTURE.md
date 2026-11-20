@@ -86,7 +86,7 @@ zephcore/
 │   ├── gps/ZephyrGPSManager.cpp/h      # GNSS state machine, fix validation, public API
 │   ├── gps/gps_power.cpp, gps_module_cfg.cpp, gps_internal.h  # module power; module configuration + diag
 │   ├── mqtt/ZephyrMQTTPublisher.c/h    # MQTT packet publisher (observer / uplink)
-│   ├── mqtt/uplink_creds.h             # WiFi/MQTT/location credentials struct (persisted by app/observer_creds)
+│   ├── mqtt/uplink_creds.h             # WiFi/MQTT/location credentials struct (JSON settings, legacy migration by app/observer_creds)
 │   ├── ota/wifi_ota.c/h           # WiFi SoftAP + HTTP firmware upload (ESP32 repeaters)
 │   ├── ota/ble_ota.c/h            # MCUmgr SMP over BLE firmware upload (ESP32 companions)
 │   ├── rng/ZephyrRNG.cpp/h        # Hardware CSPRNG with PRNG fallback
@@ -926,7 +926,32 @@ Headless store-and-forward shared message room (BBS). Clients log in with the ad
 
 ### 6.5 ObserverMesh
 
-Listen-only node (ESP32 only): receives LoRa packets and publishes them to an MQTT broker over WiFi STA (`adapters/mqtt/`, `adapters/wifi/`). Never transmits. Configured at runtime via serial CLI (credentials in `observer_creds.cpp`); build with `boards/common/observer.conf`.
+Listen-only node (ESP32 only): receives LoRa packets and publishes them to MQTT
+upstreams over WiFi STA (`adapters/mqtt/`, `adapters/wifi/`). Never transmits.
+Configured via serial CLI; build with `boards/common/observer.conf`.
+
+Each broker has an eight-message, 1024-byte-payload queue, a 12 KiB worker stack,
+its own client/buffers, packet filter and diagnostics. Failure or a full queue
+in one slot does not block another slot. The preset table matches the 42 presets
+in agessaman/MeshCore `860011d2`; host tests compare all metadata and CA roots.
+TCP, TLS, WS and WSS, preset authentication/retention and custom topic templates
+are supported. Existing packet JSON is unchanged. The display reports MQTT up
+when any slot is connected; CLI diagnostics expose each slot separately.
+
+Observer capacity is five with PSRAM and at least 256 KiB chosen SRAM, two with
+sufficient SRAM or PSRAM, and one on smaller non-PSRAM targets. The configured
+limit budgets WebSocket/TLS contexts, descriptors, queues and stacks. PSRAM builds
+place queue payloads and the 150,000-byte TLS heap externally; two-slot builds
+reserve 75,000 bytes for TLS, and one-slot builds 50,000 bytes. Repeater uplinks
+retain one slot by default. Live five-session TLS resource use is not yet hardware
+verified; compile-time memory budgets are not a packet-loss guarantee.
+
+Portable network settings and preset/CLI logic live in `helpers/UplinkConfig.h`
+and `helpers/MqttConfig.*`. Network settings are JSON-only under `zc.uplink`. The legacy 404-byte `obs_creds`
+prefix is read for migration, never rewritten; saved JSON takes precedence.
+The runtime `NodePrefs` binding adds one pointer without changing legacy codecs.
+Fresh observers use `analyzer-us` and `analyzer-eu`; migrated primary settings
+become a custom WS/WSS slot. See [ADR 0019](adr/0019-observer-mqtt-slots.md).
 
 MQTT status uses dispatcher TX/RX packet airtime counters in seconds and driver
 RX errors. The listen-only role has zero TX airtime; RX airtime is an estimated
@@ -1138,18 +1163,18 @@ driver. Persisted in `prefs.json` as `zc.leds_brightness`; it is not part of the
   the station blocks sleep only while the link is not ready.
 - **`adapters/mqtt/ZephyrMQTTPublisher.c`**: MQTT publisher for observed/uplinked packets. It reports its session to
   the station: up at CONNACK, down when the session ends for any reason. Keepalive: PINGREQ once a quarter of
-  the 60 s keepalive is left, so a broker that enforces the keepalive without grace does not close an idle
-  session.
-  One broker session uses the existing worker and eight-message queue with a 1024-byte TX buffer.
-  It connects over WebSockets at `/` (port default 443); `tls=1` selects WSS.
-  Authentication uses a startup copy of the node identity: username `v1_<UPPERCASE_PUBLIC_KEY>`,
-  password a freshly signed token on each connection. Its `publicKey`, `iat`, `exp` (one hour),
-  and `aud` (exact configured hostname) follow meshcore-decoder's contract: base64url header/claims,
-  hex Ed25519 signature, `alg=Ed25519`. An SNTP epoch/uptime anchor supplies time without reading
-  mesh state; without SNTP the worker does not connect. Retained status and LWT include `origin_id`.
-  The existing `mqtt.*` / `uplink.mqtt.*` host, port and TLS commands and frozen `obs_creds`
-  layout remain; static username/password fields are unused. There is no secondary broker
-  configuration or session. The observer screen shows MQTT up/down.
+  configured keepalive is left, so a broker that enforces it without grace does not close an idle
+  session. Each broker has its own worker, eight-message queue and 1024-byte TX buffer;
+  failures and configuration changes are isolated by slot (ADR 0019).
+  TCP, TLS, WS and WSS use the selected preset's endpoint, authentication, topic and retain policy.
+  Identity tokens use username `v1_<UPPERCASE_PUBLIC_KEY>`, base64url header/claims and
+  hex Ed25519 signatures. Token lifetime follows the preset; migrated custom connections retain
+  one hour. An SNTP epoch/uptime anchor supplies signing time without reading mesh state.
+  Presets with CA roots verify the peer and validity dates against the forward-only SNTP clock;
+  custom TLS preserves the earlier unverified behavior. Retained status and LWT include `origin_id`.
+  Legacy host/port/TLS commands select the primary custom WebSocket slot. Credentials are now
+  persisted in `prefs.json`; the frozen `obs_creds` prefix is read only for migration.
+  The observer screen shows whether any MQTT session is up.
   Its first row shows noise floor and last received RSSI in dBm; the error row also shows
   last received SNR with quarter-dB precision. Unknown startup readings show `--`.
   Full online status (including battery mV, uptime seconds and signed noise floor dBm in `stats`)
@@ -1157,15 +1182,14 @@ driver. Persisted in `prefs.json` as `zc.leds_brightness`; it is not part of the
   comes from `MainBoard`, and its main-thread event wait follows radio maintenance deadlines so
   noise-floor sampling continues on an idle channel. Boards without a voltage measurement report 0.
   Connection-stage logs distinguish WSS/CONNECT, socket/read and CONNACK timeout failures.
-  `get mqtt.status` (observer) and `get uplink.mqtt.status` (repeater) include boot totals for
+  `get mqtt.stats` (observer) and `get uplink.mqtt.status` (repeater) include boot totals for
   packet messages queued, sent, dropped on queue overflow and failed during publishing, plus
   the last packet-publish error. The observer appends the LCD flood/direct RX and radio error
   counters to the same CLI reply for comparison. Status messages are excluded; atomics bridge the producer and
   worker. QoS 0 `sent` means the local transport accepted the write, not broker/collector delivery.
   The WebSocket poll patch reports unread receive-buffer bytes as readable in native and offloaded
   polling, so MQTT packets split across WebSocket frames progress after the socket has been drained.
-  TLS is used without certificate verification, but the chain still has to be parsed: the uplink and observer
-  builds carry P-256 and P-384 with SHA-256 and SHA-384 for that.
+  The uplink and observer builds carry P-256 and P-384 with SHA-256 and SHA-384 for TLS chains.
 - **`adapters/ota/wifi_ota.c`**: WiFi SoftAP + HTTP firmware upload to MCUboot slot1 (ESP32 repeaters, requires `--sysbuild`)
 - **`adapters/ota/ble_ota.c`**: MCUmgr SMP over BLE into MCUboot slot1 (ESP32 companions built with `--sysbuild`, `boards/common/ble_ota.conf`
   auto-included; a board opts out with `ble_ota: false` in `zephcore.yml`). The SMP service is registered only while an OTA

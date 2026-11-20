@@ -3,6 +3,7 @@
 #include "PrefsJson.h"
 #include <helpers/RadioRecovery.h>
 #include "PrefsCodec.h"
+#include <adapters/mqtt/uplink_creds.h>
 
 #include <cstring>
 #include <string>
@@ -399,4 +400,48 @@ TEST(pjson_wardriving, "UNIT-PJSON-019", "Wardriving policy defaults allow and p
 	MemStream bad("{zc:{wardriving:3}}");
 	CHECK(serverPrefsFromJson(p, bad));
 	CHECK(p.wardriving == 0);
+}
+
+TEST(pjson_mqtt, "UNIT-PJSON-020", "MQTT credentials and independent slots round trip in prefs.json without changing legacy codecs") {
+	CHECK(OBSERVER_LEGACY_CREDS_SIZE == 404);
+	ObserverCreds creds{};
+	observer_creds_init(&creds);
+	strcpy(creds.wifi_ssid, "network"); strcpy(creds.wifi_psk, "wifi-secret");
+	strcpy(creds.mqtt_host, "legacy.example.org"); creds.mqtt_port = 443; creds.mqtt_tls = 1;
+	mqtt_migrate_legacy(&creds);
+	CHECK(!strcmp(creds.slots[0].preset, "custom"));
+	CHECK(!strcmp(creds.slots[0].audience, "legacy.example.org"));
+	mqtt_slot_init(&creds.slots[1], "inwmesh");
+	strcpy(creds.slots[1].username, "user"); strcpy(creds.slots[1].password, "secret");
+	creds.slots[1].filter = 0x24;
+	NodePrefs p = defaults();
+	std::string legacy = serverBytes(p);
+	p.uplink_creds = &creds;
+	CHECK(serverBytes(p) == legacy);
+	MemStream out;
+	CHECK(serverPrefsToJson(p, out));
+	ObserverCreds loaded{}; observer_creds_init(&loaded);
+	NodePrefs node = defaults(); node.uplink_creds = &loaded;
+	CHECK(serverPrefsFromJson(node, out));
+	CHECK(node.uplink_creds == &loaded);
+	CHECK(!strcmp(loaded.wifi_ssid, "network") && !strcmp(loaded.wifi_psk, "wifi-secret"));
+	CHECK(!strcmp(loaded.slots[0].audience, "legacy.example.org"));
+	CHECK(loaded.slots[0].lifetime == 3600);
+	CHECK(!strcmp(loaded.slots[1].preset, "inwmesh") && loaded.slots[1].filter == 0x24);
+	CHECK(!strcmp(loaded.slots[1].username, "user") && !strcmp(loaded.slots[1].password, "secret"));
+	std::string long_host = std::string(63, 'a') + "." + std::string(63, 'b');
+	strcpy(creds.mqtt_host, long_host.c_str()); creds.mqtt_configured = 0;
+	mqtt_migrate_legacy(&creds);
+	CHECK(std::string(creds.slots[0].server) == "wss://" + long_host);
+	CHECK(!strcmp(creds.slots[1].preset, "inwmesh"));
+	MemStream longer;
+	CHECK(serverPrefsToJson(p, longer));
+	NodePrefs without_network = defaults();
+	CHECK(serverPrefsFromJson(without_network, longer));
+	MemStream broken("{zc:{uplink:{ssid:\"changed\"},");
+	CHECK(!serverPrefsFromJson(node, broken));
+	CHECK(!strcmp(loaded.wifi_ssid, "network"));
+	MemStream old("{}");
+	CHECK(serverPrefsFromJson(node, old));
+	CHECK(!strcmp(loaded.slots[1].preset, "inwmesh"));
 }

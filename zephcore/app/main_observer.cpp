@@ -178,9 +178,9 @@ static void print_banner(void)
 		 s_creds.wifi_ssid[0] ? s_creds.wifi_ssid : "not set");
 	cli_println(line);
 
-	snprintf(line, sizeof(line), "MQTT:  %-14s (host: %s)",
+	snprintf(line, sizeof(line), "MQTT:  %-14s (primary: %s)",
 		 mqtt_publisher_is_connected() ? "CONNECTED" : "DISCONNECTED",
-		 s_creds.mqtt_host[0] ? s_creds.mqtt_host : "not set");
+		 s_creds.slots[0].preset);
 	cli_println(line);
 
 	snprintf(line, sizeof(line), "IATA:  %s",
@@ -191,10 +191,16 @@ static void print_banner(void)
 	cli_println("--- Configure: network ---");
 	cli_println("set wifi.ssid <name>       WiFi network name");
 	cli_println("set wifi.psk  <password>   WiFi password (empty = open)");
-	cli_println("set mqtt.host <hostname>   MQTT broker hostname");
-	cli_println("set mqtt.port <port>       MQTT broker port (default 8883)");
+	cli_println("get mqtt.presets [start]   List broker presets");
+	cli_println("set mqttN.preset <name>    Select a preset, custom or none");
+	cli_println("set mqttN.server <URL>     Custom broker URL");
+	cli_println("set mqttN.filter <list>    Per-slot packet types (all/none/names/IDs)");
+	cli_println("get mqtt.capacity         Number of supported broker slots");
+	cli_println("get mqttN.diag             Per-slot connection and queue diagnostics");
+	cli_println("set mqtt.host <hostname>   Legacy primary broker hostname");
+	cli_println("set mqtt.port <port>       Legacy broker port (default 443)");
 	cli_println("set mqtt.tls  <0|1>        TLS on/off (default 1)");
-	cli_println("MQTT auth: node identity; audience = broker hostname");
+	cli_println("MQTT auth and transport follow the selected preset");
 	cli_println("set mqtt.iata <code>       Location code (e.g. BUD BTS VIE SEA)");
 	cli_println("");
 	cli_println("--- Configure: node ---");
@@ -411,7 +417,11 @@ int main(void)
 	/* Load observer credentials (WiFi, MQTT, IATA) */
 	memset(&s_creds, 0, sizeof(s_creds));
 	observer_creds_init(&s_creds);
-	observer_creds_load(&s_creds, data_store.getBasePath());
+	if (!observer_creds_load(&s_creds, data_store.getBasePath())) {
+		mqtt_slot_init(&s_creds.slots[0], "analyzer-us");
+		mqtt_slot_init(&s_creds.slots[1], "analyzer-eu");
+		s_creds.mqtt_configured = 1;
+	}
 
 	/* Init event object BEFORE any callbacks */
 	k_event_init(&mesh_events);

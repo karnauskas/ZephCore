@@ -4,6 +4,7 @@
  */
 
 #include "PrefsJson.h"
+#include "MqttConfigJson.h"
 
 namespace {
 
@@ -297,6 +298,10 @@ protected:
 		def("wardriving", _p->wardriving);
 		def("disc_ts", _p->discovery_mod_timestamp);
 		def("gps_set", _p->gps_enabled_set);
+		if (_p->uplink_creds) {
+			MqttConfigJson uplink(_p->uplink_creds);
+			def("uplink", uplink);
+		}
 	}
 
 public:
@@ -393,6 +398,12 @@ bool companionPrefsFromJson(NodePrefs &p, Stream &in)
 bool serverPrefsFromJson(NodePrefs &p, Stream &in)
 {
 	NodePrefs t = p;
+	ObserverCreds *uplink = nullptr;
+	if (p.uplink_creds) {
+		uplink = new ObserverCreds(*p.uplink_creds);
+		if (!uplink) return false;
+		t.uplink_creds = uplink;
+	}
 	ServerJson j(&t);
 
 	/* Absent keys keep the caller's value, so clear the marker first: a
@@ -401,6 +412,7 @@ bool serverPrefsFromJson(NodePrefs &p, Stream &in)
 	t.gps_enabled_set = 0;
 	t.powersaving_set = 0;
 	if (!j.load(in)) {
+		delete uplink;
 		return false;
 	}
 	if (!t.gps_enabled_set) {
@@ -410,6 +422,9 @@ bool serverPrefsFromJson(NodePrefs &p, Stream &in)
 	powersaving_upgrade(&t);
 	saneRadio(t);
 	sanitizeNodePrefs(&t);
+	if (uplink) *p.uplink_creds = *uplink;
+	delete uplink;
+	t.uplink_creds = p.uplink_creds;
 	p = t;
 	return true;
 }

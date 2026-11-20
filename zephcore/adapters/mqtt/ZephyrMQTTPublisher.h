@@ -2,9 +2,9 @@
  * SPDX-License-Identifier: MIT
  * ZephyrMQTTPublisher — MQTT client thread for the Observer role.
  *
- * Dedicated thread: waits for WiFi ready, resolves broker hostname,
- * connects over WebSockets with optional TLS (TLS_PEER_VERIFY_NONE), publishes LWT and
- * status, then drains a pre-serialized JSON publish queue.
+ * Independent bounded workers wait for WiFi, resolve each broker hostname,
+ * connect over TCP/WebSockets with optional TLS, publish LWT and
+ * status, then drain pre-serialized JSON publish queues.
  */
 
 #pragma once
@@ -19,9 +19,7 @@ extern "C" {
 
 struct ObserverCreds;
 
-/* The publisher only ever writes to the two topics registered in
- * mqtt_publisher_start(); messages carry a 1-byte index instead of a
- * per-message topic string. */
+/* Messages carry a topic kind; each slot resolves its own topic template. */
 enum mqtt_pub_topic {
 	MQTT_PUB_TOPIC_STATUS  = 0,
 	MQTT_PUB_TOPIC_PACKETS = 1,
@@ -30,7 +28,7 @@ enum mqtt_pub_topic {
 /*
  * Start the MQTT publisher thread.
  *   creds         — runtime credentials; pointer kept, must remain valid.
- *   client_id     — MQTT client identifier string (e.g. "Observer-AABBCCDD").
+ *   client_id     — legacy caller label; wire client IDs use the public key and slot.
  *   status_topic  — topic for retained online/offline status messages.
  *   packets_topic — topic for received LoRa packet JSON messages.
  *
@@ -51,8 +49,11 @@ void mqtt_publisher_start(const struct ObserverCreds *creds,
  */
 char *mqtt_publisher_stage(size_t *size);
 void mqtt_publisher_commit(enum mqtt_pub_topic topic, int payload_len);
+void mqtt_publisher_commit_packet(uint8_t payload_type, int payload_len);
+void mqtt_publisher_format_slot(unsigned slot, char *out, size_t size);
+void mqtt_publisher_format_connections(char *out, size_t size);
 
-/* True when the broker session is active. */
+/* True when at least one broker session is active. */
 bool mqtt_publisher_is_connected(void);
 
 /* Boot totals for packet-topic messages; sent means local QoS 0 transport success,
@@ -64,6 +65,7 @@ void mqtt_publisher_format_status(char *out, size_t size);
  * Safe to call from any thread.
  */
 void mqtt_publisher_reconnect(void);
+void mqtt_publisher_reconnect_slot(unsigned slot);
 
 /* SNTP time anchor used by the worker to mint fresh per-host authentication tokens. */
 void mqtt_publisher_set_time(uint32_t epoch);

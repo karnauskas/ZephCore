@@ -27,3 +27,17 @@ struct k_sem { int ready; };
 static inline void k_sem_take(struct k_sem *s, int wait) { ARG_UNUSED(s); ARG_UNUSED(wait); }
 static inline void k_sem_give(struct k_sem *s) { s->ready=1; }
 int64_t k_uptime_get(void);
+
+#define __aligned(n) __attribute__((aligned(n)))
+#define CONTAINER_OF(ptr, type, member) ((type *)((char *)(ptr) - offsetof(type, member)))
+struct k_thread { int unused; };
+#define K_THREAD_STACK_ARRAY_DEFINE(name, count, size) static char name[count][size]
+#define K_THREAD_STACK_SIZEOF(stack) sizeof(stack)
+static inline void k_thread_create(struct k_thread *t, char *stack, size_t size, void (*fn)(void*,void*,void*), void *a, void *b, void *c, int pri, int opts, int delay) { ARG_UNUSED(t); ARG_UNUSED(stack); ARG_UNUSED(size); ARG_UNUSED(fn); ARG_UNUSED(a); ARG_UNUSED(b); ARG_UNUSED(c); ARG_UNUSED(pri); ARG_UNUSED(opts); ARG_UNUSED(delay); }
+struct k_mutex { int unused; };
+#define K_MUTEX_DEFINE(name) struct k_mutex name
+static inline void k_mutex_lock(struct k_mutex *m, int wait) { ARG_UNUSED(m); ARG_UNUSED(wait); }
+static inline void k_mutex_unlock(struct k_mutex *m) { ARG_UNUSED(m); }
+static inline void k_msgq_init(struct k_msgq *q, char *buf, size_t size, unsigned count) { ARG_UNUSED(buf); ARG_UNUSED(count); q->count=0; q->size=size; }
+static inline void k_msgq_purge(struct k_msgq *q) { q->count=0; }
+static inline void k_event_init(struct k_event *e) { e->bits=0; }

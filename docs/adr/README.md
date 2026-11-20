@@ -23,3 +23,4 @@ restructure; most describe decisions taken earlier. The system view is in [../DE
 | [0016](0016-mqtt-websocket-auth.md) | MQTT WebSockets and node identity authentication |
 | [0017](0017-recovery-and-power-observations.md) | Opt-in recovery and raw power observations; automatic policy deferred |
 | [0018](0018-lithuania-radio-defaults.md) | Match Atviras Tinklas radio defaults |
+| [0019](0019-observer-mqtt-slots.md) | Resource-bounded observer MQTT slots and compatible broker presets |

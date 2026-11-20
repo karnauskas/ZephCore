@@ -31,10 +31,26 @@ static bool base64url(const char *input, size_t len, char *out, size_t size)
 	return true;
 }
 
+void mqtt_auth_public_key(char out[65])
+{
+	static const char hex[] = "0123456789ABCDEF";
+	for (unsigned i = 0; i < PUB_KEY_SIZE; ++i) {
+		out[i * 2] = hex[s_identity.pub_key[i] >> 4];
+		out[i * 2 + 1] = hex[s_identity.pub_key[i] & 15];
+	}
+	out[64] = 0;
+}
+
 bool mqtt_auth_credentials(const char *audience, uint32_t epoch,
+	char *username, size_t username_size, char *token, size_t token_size)
+{
+	return mqtt_auth_credentials_lifetime(audience, epoch, 3600, username, username_size, token, token_size);
+}
+
+bool mqtt_auth_credentials_lifetime(const char *audience, uint32_t epoch, uint32_t lifetime,
 			   char *username, size_t username_size, char *token, size_t token_size)
 {
-	if (epoch < 1700000000u || epoch > UINT32_MAX - 3600 ||
+	if (epoch < 1700000000u || !lifetime || lifetime > 86400 || epoch > UINT32_MAX - lifetime ||
 	    username_size < 68 || !*audience || strlen(audience) > 127) return false;
 	for (const char *p = audience; *p; ++p) {
 		if (!((*p >= 'a' && *p <= 'z') || (*p >= 'A' && *p <= 'Z') ||
@@ -50,7 +66,7 @@ bool mqtt_auth_credentials(const char *audience, uint32_t epoch,
 	char claims[320];
 	int n = snprintf(claims, sizeof(claims),
 		"{\"publicKey\":\"%s\",\"iat\":%u,\"exp\":%u,\"aud\":\"%s\"}",
-		username + 3, (unsigned)epoch, (unsigned)(epoch + 3600), audience);
+		username + 3, (unsigned)epoch, (unsigned)(epoch + lifetime), audience);
 	if (n < 0 || n >= (int)sizeof(claims)) return false;
 	static const char header[] = "eyJhbGciOiJFZDI1NTE5IiwidHlwIjoiSldUIn0.";
 	if (token_size < sizeof(header)) return false;

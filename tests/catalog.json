@@ -916,6 +916,36 @@
       "id": "UNIT-ANTENNA-006",
       "name": "Antenna labels classify means on the ping scale and keep mesh readings complete",
       "source": "tests/unit/antenna_stats_tests.cpp"
+    },
+    {
+      "id": "UNIT-MQTT-010",
+      "name": "All broker presets match the pinned reference including transports credentials and CA roots",
+      "source": "tests/unit/mqtt_config_tests.cpp"
+    },
+    {
+      "id": "UNIT-MQTT-011",
+      "name": "MQTT slot CLI validates presets filters and capacity without changing invalid settings",
+      "source": "tests/unit/mqtt_config_tests.cpp"
+    },
+    {
+      "id": "UNIT-MQTT-012",
+      "name": "MQTT presets resolve TCP WebSocket authentication topics and timing independently",
+      "source": "tests/unit/mqtt_config_tests.cpp"
+    },
+    {
+      "id": "UNIT-PJSON-020",
+      "name": "MQTT credentials and independent slots round trip in prefs.json without changing legacy codecs",
+      "source": "tests/unit/prefs_json_tests.cpp"
+    },
+    {
+      "id": "UNIT-MQTT-013",
+      "name": "Independent broker workers isolate connection failures full queues and packet filters",
+      "source": "tests/unit/mqtt_tests.cpp"
+    },
+    {
+      "id": "UNIT-MQTT-014",
+      "name": "Broker clients select TCP TLS and WebSocket sockets and preserve preset authentication policies",
+      "source": "tests/unit/mqtt_tests.cpp"
     }
   ]
 }

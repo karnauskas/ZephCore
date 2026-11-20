@@ -357,19 +357,75 @@ The observer role (ESP32, `boards/common/observer.conf`) has its own CLI and, ap
 | `set lat <-90..90>` / `set lon <-180..180>` | Position in decimal degrees. Once a position is set and the name is no longer the default, the observer publishes its own advert to MQTT |
 | `set meshtimesync <on\|off>` | Mesh clock consensus correction. See `MESHTIMESYNC.md` |
 | `set wifi.ssid <name>` | WiFi network; reconnects WiFi |
-| `set wifi.psk <password>` | WiFi password; reconnects WiFi. There is no `get` for it |
+| `set wifi.psk <password>` / `set wifi.pwd <password>` | WiFi password; reconnects WiFi. There is no `get` for it |
 | `set mqtt.host <host>` | MQTT broker host; reconnects MQTT, as do the four below |
 | `set mqtt.port <port>` | 1–65535 |
 | `set mqtt.tls <0\|1>` | TLS off or on |
 | `set mqtt.iata <code>` | Location code used in the MQTT topics (e.g. `BUD`); rebuilds the topics and reconnects MQTT |
 
-The MQTT broker uses WebSockets at `/` on port **443**, with TLS enabled for WSS.
-For an existing saved configuration use `set mqtt.port 443` and `set mqtt.tls 1`.
-Authentication is automatic: `v1_<UPPERCASE_PUBLIC_KEY>` username and an Ed25519
-signed token with `publicKey`, `iat`, one-hour `exp`, and `aud` equal to the broker
-hostname. Tokens are regenerated per connection and require SNTP time. Static
-username/password configuration is not used; the private key stays on the node.
-Repeater commands use the `uplink.` prefix. Only one broker is supported.
+### Observer MQTT slots and presets
+
+The observer supports the MQTT slot commands from the
+[Gessaman observer guide](https://observer.gessaman.com/docs). `N` is `1` through
+the number reported by `get mqtt.capacity`: five on PSRAM targets with sufficient
+internal SRAM, two on larger non-PSRAM targets, and one on smaller targets.
+Unused slots are disabled with preset `none`. Fresh observers select `analyzer-us`
+and `analyzer-eu`; existing broker choices are migrated to the first slot.
+
+```text
+get mqtt.capacity
+get mqtt.presets
+set mqtt.iata VNO
+set mqtt1.preset analyzer-eu
+set mqtt2.preset meshmapper
+get mqtt.status
+get mqtt1.diag
+```
+
+`get mqtt.presets [start]` pages through the same 42 named presets as the reference
+revision `860011d2`, followed by `custom` and `none`; continue using `next:<index>`.
+Presets preserve URLs, paths, CA roots, authentication, keepalive and retain policy.
+
+| Command | Behavior |
+|---|---|
+| `get/set mqttN.preset <name>` | Select a built-in preset, `custom`, or `none` |
+| `get/set mqttN.server <host or URL>` | Custom URL: `mqtt://`, `mqtts://`, `ws://`, or `wss://`; bare hosts default to TCP/1883 |
+| `get/set mqttN.port <1-65535>` | Custom port; an explicit URL port wins |
+| `get/set mqttN.username <value>` | Custom or preset-specific username |
+| `get/set mqttN.password <value>` | Custom or preset-specific password; local console getter returns the value |
+| `get/set mqttN.token <value>` | Topic token, required for `meshrank` |
+| `get/set mqttN.audience <host>` | Custom JWT audience; bare `set` clears it |
+| `get/set mqttN.topic <template>` | Custom topic template; default `meshcore/{iata}/{device}/{type}` |
+| `get/set mqttN.filter <all\|none\|list>` | Packet-type allowlist, names or IDs; bare `set` restores `all` |
+| `get mqttN.diag` / `get mqttN.status` | Connection state, queued/sent/dropped/failed/filtered counts and last error |
+| `get mqtt.status` | Connection states for all active slots, plus observer RX counters |
+| `get mqtt.stats` | Aggregate packet-delivery counts; fan-out counts once per destination |
+| `get link.status` | WiFi and aggregate MQTT connection state |
+
+Topic placeholders are `{iata}`, `{device}`, `{token}` and `{type}`; types are
+`status` and `packets`. Packet filter names are `req`, `response`, `txt_msg`, `ack`,
+`advert`, `grp_txt`, `grp_data`, `anon_req`, `path`, `trace`, `multipart`, `control`
+and `raw_custom`; reserved payload types use IDs `12`–`14`. Filtering affects
+publishing only. Status messages bypass packet filters. Filters apply live;
+other indexed edits reconnect only their slot. Failed preference saves roll back
+indexed edits. Messages queued for an old slot configuration are discarded on
+reconfiguration.
+
+JWT presets use the node identity and require SNTP time. Preset token lifetimes
+are preserved; new custom JWT connections use 24 hours; migrated legacy brokers keep one hour. Presets with a CA verify the
+server certificate. Custom TLS retains the earlier encrypted, unverified-TLS
+behavior. `meshrank` uses `meshrank/uplink/{token}/{device}/{type}` without retain.
+
+Settings now live in `prefs.json`; legacy `obs_creds` settings migrate without
+changing identity, WiFi credentials or the existing broker. Legacy
+`mqtt.host`/`mqtt.port`/`mqtt.tls` setters configure the first slot as a custom
+root-path WS/WSS broker. Repeater uplinks keep those commands under `uplink.`
+and one active slot by default. The observer remains USB-CLI-only and listen-only.
+Address resolution remains IPv4-only. Only the MQTT commands listed above are
+supported. Reference-wide publishing
+switches/intervals, origin overrides, the web portal, OTA/SNMP/LoRa-alert commands,
+active-neighbour requests,
+raw-topic publishing and owner/email JWT claims are not implemented here.
 
 
 ---

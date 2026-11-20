@@ -71,3 +71,14 @@ Fixed radio replies stopping after `set tx`, including on the XIAO nRF52840.
 A changed power setting needs a full modem configuration; the common radio
 adapter now exits RX before that configuration, as required by the driver.
 Normal direction-only switches keep their existing fast path.
+
+## Observer MQTT slots and compatible presets
+
+Observers can configure independent MQTT broker slots using `set mqttN.preset`,
+`get mqtt.presets`, per-slot packet filters and `get mqttN.diag`. The preset
+catalog matches Gessaman observer revision `860011d2`, including transports,
+authentication, topic styles and retain policies. Supported slot counts follow
+available SRAM/PSRAM resources; query `get mqtt.capacity` on the running build.
+Existing single-broker credentials migrate into `prefs.json` and keep their
+primary connection. Fresh observers default to the Let's Mesh US/EU presets.
+The observer remains listen-only. Hardware multi-session validation is pending.

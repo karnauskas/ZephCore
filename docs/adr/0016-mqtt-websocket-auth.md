@@ -1,6 +1,7 @@
 # ADR 0016 — MQTT WebSockets and node identity authentication
 
-Status: accepted (2026-10-23)
+Status: accepted (2026-10-23); transport/authentication scope and the single-broker
+restriction superseded by [ADR 0019](0019-observer-mqtt-slots.md).
 
 ## Decision
 

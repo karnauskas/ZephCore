@@ -1,5 +1,34 @@
 # SPDX-License-Identifier: MIT
 
+config ZVFS_OPEN_MAX
+	depends on ZVFS
+	default ZEPHCORE_MQTT_CONNECTIONS if MQTT_LIB
+
+config WEBSOCKET_MAX_CONTEXTS
+	depends on WEBSOCKET_CLIENT
+	default ZEPHCORE_MQTT_CONNECTIONS if MQTT_LIB
+
+config NET_SOCKETS_TLS_MAX_CONTEXTS
+	depends on NET_SOCKETS_SOCKOPT_TLS
+	default 6 if ZEPHCORE_MQTT_CONNECTIONS > 2
+	default 3 if ZEPHCORE_MQTT_CONNECTIONS = 2
+	default 1 if ZEPHCORE_MQTT_CONNECTIONS = 1
+
+config TLS_MAX_CREDENTIALS_NUMBER
+	depends on TLS_CREDENTIALS
+	default 8 if ZEPHCORE_MQTT_CONNECTIONS > 2
+
+config MBEDTLS_HEAP_CUSTOM_SECTION
+	depends on MBEDTLS && MBEDTLS_ENABLE_HEAP
+	default y if MQTT_LIB && ESP_SPIRAM
+
+config MBEDTLS_HEAP_SIZE
+	depends on MBEDTLS && MBEDTLS_ENABLE_HEAP
+	default 150000 if ZEPHCORE_MQTT_CONNECTIONS > 2
+	default 75000 if ZEPHCORE_MQTT_CONNECTIONS = 2
+	default 50000 if ZEPHCORE_MQTT_CONNECTIONS = 1
+
+
 # WiFi companion on a PSRAM board: the WiFi heap and the network buffers go to
 # PSRAM, so WiFi and BLE fit together (ZEPHCORE_COMPANION_WIFI). Ahead of
 # Kconfig.zephyr, because a choice takes its first matching default and the
@@ -239,6 +268,21 @@ config ZEPHCORE_COMPANION_SERIAL
 
 	  On by default for a board without Bluetooth that names the chosen node
 	  (the LoRa-E5 mini): the UART is then its only companion link.
+
+config ZEPHCORE_MQTT_CONNECTIONS
+	int "Concurrent MQTT upstreams"
+	depends on ZEPHCORE_ROLE_OBSERVER || ZEPHCORE_REPEATER_UPLINK
+	range 1 5 if ESP_SPIRAM && $(dt_chosen_reg_size_int,zephyr,sram) >= 262144
+	range 1 2 if ESP_SPIRAM || $(dt_chosen_reg_size_int,zephyr,sram) >= 262144
+	range 1 1
+	default 5 if ZEPHCORE_ROLE_OBSERVER && ESP_SPIRAM && $(dt_chosen_reg_size_int,zephyr,sram) >= 262144
+	default 2 if ZEPHCORE_ROLE_OBSERVER && (ESP_SPIRAM || $(dt_chosen_reg_size_int,zephyr,sram) >= 262144)
+	default 1
+	help
+	  Independent bounded publisher queues and worker stacks per broker.
+	  Five slots require PSRAM for TLS/queues and at least 256 KB of
+	  chosen SRAM for worker stacks. Smaller SRAM without PSRAM supports
+	  one slot; the remaining builds support two.
 
 if ZEPHCORE_ROLE_REPEATER || ZEPHCORE_ROLE_ROOM_SERVER
 

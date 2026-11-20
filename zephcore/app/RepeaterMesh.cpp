@@ -1061,6 +1061,7 @@ RepeaterMesh::RepeaterMesh(mesh::MainBoard& board, mesh::Radio& radio, mesh::Mil
 #if IS_ENABLED(CONFIG_ZEPHCORE_REPEATER_UPLINK) && IS_ENABLED(CONFIG_MQTT_LIB)
   memset(&_uplink_creds, 0, sizeof(_uplink_creds));
   observer_creds_init(&_uplink_creds);
+  _prefs.uplink_creds = &_uplink_creds;
   _uplink_reboot_required = false;
   memset(_uplink_pubkey_hex, 0, sizeof(_uplink_pubkey_hex));
   memset(_uplink_packets_topic, 0, sizeof(_uplink_packets_topic));
@@ -1101,7 +1102,7 @@ void RepeaterMesh::begin(RepeaterDataStore* store) {
   LOG_INF("RepeaterMesh started: %s (freq=%.2f bw=%.0f sf=%d cr=%d)",
     _prefs.node_name, (double)_prefs.freq, (double)_prefs.bw, _prefs.sf, _prefs.cr);
 #if IS_ENABLED(CONFIG_ZEPHCORE_REPEATER_UPLINK) && IS_ENABLED(CONFIG_MQTT_LIB)
-  observer_creds_load(&_uplink_creds, _store->getBasePath());
+  if (!_store->savePrefs(_prefs)) LOG_ERR("Network preferences migration could not be saved");
   mesh::Utils::toHex(_uplink_pubkey_hex, self_id.pub_key, PUB_KEY_SIZE);
   _uplink_pubkey_hex[PUB_KEY_SIZE * 2] = '\0';
 

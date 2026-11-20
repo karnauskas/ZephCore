@@ -590,6 +590,8 @@ if(CONFIG_ZEPHCORE_ROLE_REPEATER OR CONFIG_ZEPHCORE_ROLE_ROOM_SERVER)
         adapters/wifi/ZephyrWiFiStation.c
         adapters/mqtt/ZephyrMQTTPublisher.c
         helpers/MqttAuth.cpp
+        helpers/MqttConfig.c
+        helpers/MqttPresets.c
       )
       target_include_directories(app PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/adapters/wifi
@@ -613,6 +615,8 @@ elseif(CONFIG_ZEPHCORE_ROLE_OBSERVER)
     adapters/wifi/ZephyrWiFiStation.c
     adapters/mqtt/ZephyrMQTTPublisher.c
     helpers/MqttAuth.cpp
+    helpers/MqttConfig.c
+    helpers/MqttPresets.c
   )
   target_include_directories(app PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/adapters/wifi
@@ -849,3 +853,5 @@ if(ADAFRUIT_NRFUTIL AND ZEPHCORE_PLATFORM STREQUAL "nrf52")
 else()
   message(STATUS "DFU zip generation: DISABLED (adafruit-nrfutil not found)")
 endif()
+
+target_compile_definitions(app PRIVATE CONFIG_MAX_TOKEN_LEN=256)

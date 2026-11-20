@@ -55,11 +55,13 @@ void ObserverMesh::begin(RepeaterDataStore *store, struct ObserverCreds *creds)
 
 	/* Initialize prefs with observer-specific defaults */
 	initNodePrefs(&_prefs);
+	_prefs.uplink_creds = _creds;
 	_prefs.tx_power_dbm = 0;   /* observer never TXes anyway */
 
 	/* Persisted prefs override the defaults above; on a fresh unit the store
 	 * saves these defaults as they are. */
 	_store->loadPrefs(_prefs);
+	if (!_store->savePrefs(_prefs)) LOG_ERR("Network preferences migration could not be saved");
 
 	/* Load or generate the node identity, through
 	 * ZephyrRNG::generateFirstBootIdentity like the other roles: on an ESP32
@@ -216,7 +218,7 @@ void ObserverMesh::enqueuePacket(Packet *pkt)
 		json_len = (int)json_cap - 1;
 	}
 
-	mqtt_publisher_commit(MQTT_PUB_TOPIC_PACKETS, json_len);
+	mqtt_publisher_commit_packet(pkt->getPayloadType(), json_len);
 }
 
 DispatcherAction ObserverMesh::onRecvPacket(Packet *pkt)
@@ -291,6 +293,38 @@ void ObserverMesh::noteTrustedTimeSync()
 
 bool ObserverMesh::handleCLI(const char *command, char *reply, int reply_size)
 {
+	if (!strncmp(command, "get mqtt", 8) && command[8] >= '1' && command[8] <= '9' &&
+	    (!strcmp(command + 9, ".diag") || !strcmp(command + 9, ".status"))) {
+		mqtt_publisher_format_slot(command[8] - '1', reply, reply_size);
+		return false;
+	}
+	if (!strcmp(command, "get mqtt.stats")) {
+		mqtt_publisher_format_status(reply, reply_size);
+		return false;
+	}
+	if (!strcmp(command, "get link.status")) {
+		snprintf(reply, reply_size, "> wifi:%s mqtt:%s", zc_wifi_station_is_connected() ? "connected" : "disconnected",
+			mqtt_publisher_is_connected() ? "connected" : "disconnected");
+		return false;
+	}
+	const bool mqtt_update = !strncmp(command, "set mqtt", 8) && command[8] >= '1' &&
+		command[8] < '1' + CONFIG_ZEPHCORE_MQTT_CONNECTIONS;
+	MqttSlot previous{};
+	uint8_t configured = _creds->mqtt_configured;
+	if (mqtt_update) previous = _creds->slots[command[8] - '1'];
+	int mqtt_command = mqtt_config_command(_creds, command, reply, reply_size);
+	if (mqtt_command) {
+		if (mqtt_command == 2) {
+			if (!observer_creds_save(_creds, _store->getBasePath(), &_prefs)) {
+				_creds->slots[command[8] - '1'] = previous;
+				_creds->mqtt_configured = configured;
+				snprintf(reply, reply_size, "Error: setting not persisted; change rolled back");
+			}
+			else if (!strstr(command, ".filter")) mqtt_publisher_reconnect_slot(command[8] - '1');
+		}
+		return false;
+	}
+
 	reply[0] = '\0';
 
 	/* ---- help ---- */
@@ -350,7 +384,7 @@ bool ObserverMesh::handleCLI(const char *command, char *reply, int reply_size)
 				 zc_wifi_station_is_connected() ? "connected" : "disconnected");
 
 		} else if (strcmp(key, "mqtt.status") == 0) {
-			mqtt_publisher_format_status(reply, reply_size);
+			mqtt_publisher_format_connections(reply, reply_size);
 			size_t used = strlen(reply);
 			snprintf(reply + used, reply_size - used, " rx_flood=%u rx_direct=%u rx_errors=%u",
 				(unsigned)getNumRecvFlood(), (unsigned)getNumRecvDirect(),
@@ -528,21 +562,24 @@ bool ObserverMesh::handleCLI(const char *command, char *reply, int reply_size)
 		} else if ((val = find_val(rest, "wifi.ssid")) != nullptr) {
 			strncpy(_creds->wifi_ssid, val, sizeof(_creds->wifi_ssid) - 1);
 			_creds->wifi_ssid[sizeof(_creds->wifi_ssid) - 1] = '\0';
-			observer_creds_save(_creds, _store->getBasePath());
+			observer_creds_save(_creds, _store->getBasePath(), &_prefs);
 			snprintf(reply, reply_size, "wifi.ssid=%s (reconnecting)", _creds->wifi_ssid);
 			zc_wifi_station_reconnect();
 
-		} else if ((val = find_val(rest, "wifi.psk")) != nullptr) {
+		} else if ((val = find_val(rest, "wifi.psk")) != nullptr ||
+			   (val = find_val(rest, "wifi.pwd")) != nullptr) {
 			strncpy(_creds->wifi_psk, val, sizeof(_creds->wifi_psk) - 1);
 			_creds->wifi_psk[sizeof(_creds->wifi_psk) - 1] = '\0';
-			observer_creds_save(_creds, _store->getBasePath());
+			observer_creds_save(_creds, _store->getBasePath(), &_prefs);
 			snprintf(reply, reply_size, "wifi.psk=*** (saved, reconnecting)");
 			zc_wifi_station_reconnect();
 
 		} else if ((val = find_val(rest, "mqtt.host")) != nullptr) {
 			strncpy(_creds->mqtt_host, val, sizeof(_creds->mqtt_host) - 1);
 			_creds->mqtt_host[sizeof(_creds->mqtt_host) - 1] = '\0';
-			observer_creds_save(_creds, _store->getBasePath());
+			_creds->mqtt_configured = 0;
+			mqtt_migrate_legacy(_creds);
+			observer_creds_save(_creds, _store->getBasePath(), &_prefs);
 			snprintf(reply, reply_size, "mqtt.host=%s (reconnecting)", _creds->mqtt_host);
 			mqtt_publisher_reconnect();
 
@@ -550,7 +587,9 @@ bool ObserverMesh::handleCLI(const char *command, char *reply, int reply_size)
 			int port = atoi(val);
 			if (port > 0 && port <= 65535) {
 				_creds->mqtt_port = (uint16_t)port;
-				observer_creds_save(_creds, _store->getBasePath());
+				_creds->mqtt_configured = 0;
+			mqtt_migrate_legacy(_creds);
+			observer_creds_save(_creds, _store->getBasePath(), &_prefs);
 				snprintf(reply, reply_size, "mqtt.port=%u (reconnecting)", _creds->mqtt_port);
 				mqtt_publisher_reconnect();
 			} else {
@@ -560,7 +599,9 @@ bool ObserverMesh::handleCLI(const char *command, char *reply, int reply_size)
 		} else if ((val = find_val(rest, "mqtt.tls")) != nullptr) {
 			int tls = atoi(val);
 			_creds->mqtt_tls = (tls != 0) ? 1 : 0;
-			observer_creds_save(_creds, _store->getBasePath());
+			_creds->mqtt_configured = 0;
+			mqtt_migrate_legacy(_creds);
+			observer_creds_save(_creds, _store->getBasePath(), &_prefs);
 			snprintf(reply, reply_size, "mqtt.tls=%u (reconnecting)", _creds->mqtt_tls);
 			mqtt_publisher_reconnect();
 
@@ -570,7 +611,7 @@ bool ObserverMesh::handleCLI(const char *command, char *reply, int reply_size)
 		} else if ((val = find_val(rest, "mqtt.iata")) != nullptr) {
 			strncpy(_creds->mqtt_iata, val, sizeof(_creds->mqtt_iata) - 1);
 			_creds->mqtt_iata[sizeof(_creds->mqtt_iata) - 1] = '\0';
-			observer_creds_save(_creds, _store->getBasePath());
+			observer_creds_save(_creds, _store->getBasePath(), &_prefs);
 			buildTopics();  /* rebuild topic strings with new IATA */
 			snprintf(reply, reply_size, "mqtt.iata=%s (topics updated, reconnecting)", _creds->mqtt_iata);
 			mqtt_publisher_reconnect();
@@ -581,7 +622,7 @@ bool ObserverMesh::handleCLI(const char *command, char *reply, int reply_size)
 				snprintf(reply, reply_size, "ERR lat must be -90..90");
 			} else {
 				_creds->lat_e6 = (int32_t)(lat_d * 1e6);
-				observer_creds_save(_creds, _store->getBasePath());
+				observer_creds_save(_creds, _store->getBasePath(), &_prefs);
 				snprintf(reply, reply_size, "lat=%.6f", lat_d);
 			}
 
@@ -591,7 +632,7 @@ bool ObserverMesh::handleCLI(const char *command, char *reply, int reply_size)
 				snprintf(reply, reply_size, "ERR lon must be -180..180");
 			} else {
 				_creds->lon_e6 = (int32_t)(lon_d * 1e6);
-				observer_creds_save(_creds, _store->getBasePath());
+				observer_creds_save(_creds, _store->getBasePath(), &_prefs);
 				snprintf(reply, reply_size, "lon=%.6f", lon_d);
 			}
 
@@ -718,7 +759,7 @@ void ObserverMesh::publishSelfAdvert()
 		return;
 	}
 
-	mqtt_publisher_commit(MQTT_PUB_TOPIC_PACKETS, json_len);
+	mqtt_publisher_commit_packet(PAYLOAD_TYPE_ADVERT, json_len);
 	LOG_INF("Self-advert published (lat=%.6f lon=%.6f)",
 		(double)_creds->lat_e6 / 1e6, (double)_creds->lon_e6 / 1e6);
 }
