@@ -74,6 +74,9 @@ public:
 	bool setRxBoostedGain(bool enable) override {
 		return _radio.setRxBoost(enable);
 	}
+	bool supportsRxPowerSaving() const override { return _radio.supportsRxPowerSaving(); }
+	void applyRxPowerSaving() override { _radio.applyRxPowerSaving(); }
+	void formatRxPowerSaving(char *out, size_t size) const override { _radio.formatRxPowerSaving(out, size); }
 
 	bool setFemRxGain(bool enable) override {
 		return _radio.setFemRxEnable(enable);

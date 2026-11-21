@@ -293,6 +293,25 @@ void ObserverMesh::noteTrustedTimeSync()
 
 bool ObserverMesh::handleCLI(const char *command, char *reply, int reply_size)
 {
+	auto *radio = static_cast<LoRaRadio *>(_radio);
+	if (!strcmp(command, "get radio.rxps")) {
+		radio->formatRxPowerSaving(reply, reply_size);
+		return false;
+	}
+	if (!strncmp(command, "set radio.rxps ", 15)) {
+		const auto previous = _prefs.rxps;
+		const uint8_t enabled = _prefs.rx_duty_cycle;
+		if (rxPowerSavingCommand(command, _prefs.rx_duty_cycle, _prefs.rxps, reply, reply_size) == 2) {
+			if ((_prefs.rx_duty_cycle && !radio->supportsRxPowerSaving()) || !_store->savePrefs(_prefs)) {
+				_prefs.rxps = previous; _prefs.rx_duty_cycle = enabled;
+				snprintf(reply, reply_size, "Error: RXPS unsupported or preferences could not be saved");
+			} else {
+				radio->applyRxPowerSaving();
+				radio->formatRxPowerSaving(reply, reply_size);
+			}
+		}
+		return false;
+	}
 	if (!strncmp(command, "get mqtt", 8) && command[8] >= '1' && command[8] <= '9' &&
 	    (!strcmp(command + 9, ".diag") || !strcmp(command + 9, ".status"))) {
 		mqtt_publisher_format_slot(command[8] - '1', reply, reply_size);

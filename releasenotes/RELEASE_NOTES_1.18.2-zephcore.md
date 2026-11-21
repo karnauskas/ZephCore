@@ -93,3 +93,16 @@ their previous forwarding policy. Public filtering authenticates the channel MAC
 without decrypting and preserves unrelated channels sharing its hash byte.
 Choices save immediately in `prefs.json` and survive upgrades. Local reception
 is unchanged; rooms and observers remain non-forwarding.
+
+## Power-saving controls
+
+Added `get/set radio.rxps` profiles, manual timing and requested/effective RX
+status for companions, repeaters, room servers and observers. Settings save in
+`prefs.json`; RXPS remains off by default. `set rxduty` now applies live.
+Timing guards retain continuous RX when duty cycling cannot safely fit the
+configured preamble. Experimental levels 9–10 are unavailable.
+
+Capable ESP32 room servers now use the repeater light-sleep policy. Fresh server
+GPS settings default to daily acquisition; saved intervals remain unchanged.
+Companion authorized remote CLI supports power-saving and GPS controls.
+Hardware battery-current, wake and reception-loss measurements remain pending.

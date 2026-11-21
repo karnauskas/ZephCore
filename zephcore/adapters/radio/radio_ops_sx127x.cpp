@@ -20,6 +20,7 @@ static int16_t sx127x_get_rssi_inst(const struct device *dev)
 
 const LoRaRadioOps kLoRaRadioOps = {
 	.loramac_node = true,
+	.rx_duty_cycle = false,
 	.rssi_inst = sx127x_get_rssi_inst,
 };
 

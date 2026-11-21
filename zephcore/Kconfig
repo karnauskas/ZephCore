@@ -1048,11 +1048,11 @@ config ZEPHCORE_GPS_FIRST_FIX_TIMEOUT_SEC
 
 config ZEPHCORE_REPEATER_GPS_INTERVAL_SEC
 	int "Repeater GPS duty interval in seconds (boot default)"
-	default 172800
+	default 86400
 	range 0 604800
 	help
 	  Default GPS standby interval for repeaters/room servers: how often
-	  the GPS wakes for a time-sync fix. Default 172800s (48 hours).
+	  the GPS wakes for a time-sync fix. Default 86400s (24 hours).
 	  0 = always-on (never sleeps). Applied at boot until the operator
 	  overrides it with "set gps duty <sec>" (persisted to flash).
 	  Companions default to ZEPHCORE_GPS_POLL_INTERVAL_SEC (300s) instead.

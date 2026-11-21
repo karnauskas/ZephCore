@@ -53,6 +53,11 @@ public:
 	virtual void setTxPower(int8_t power_dbm) = 0;
 	/* The radio knobs below return false when the radio lacks the feature. */
 	virtual bool setRxBoostedGain(bool enable) { (void)enable; return false; }
+	virtual bool supportsRxPowerSaving() const { return false; }
+	virtual void applyRxPowerSaving() { }
+	virtual void formatRxPowerSaving(char *out, size_t size) const {
+		snprintf(out, size, "supported=no");
+	}
 	/* External FEM/LNA in RX. True and a no-op on a supporting radio whose
 	 * board has no FEM wired. */
 	virtual bool setFemRxGain(bool enable) { (void)enable; return false; }

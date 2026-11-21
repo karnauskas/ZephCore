@@ -16,6 +16,7 @@ namespace mesh {
  * (UM: image cal after > 10 C), with the temperature from the board. */
 const LoRaRadioOps kLoRaRadioOps = {
 	.loramac_node = false,
+	.rx_duty_cycle = true,
 	.rssi_inst = lr11xx_get_rssi_inst,
 	.rssi_burst = lr11xx_get_rssi_burst,
 	.is_receiving = lr11xx_is_receiving,

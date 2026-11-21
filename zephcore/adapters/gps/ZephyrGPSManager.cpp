@@ -1,4 +1,5 @@
 #include <helpers/PowerBudget.h>
+#include <helpers/GpsPowerSchedule.h>
 /*
  * SPDX-License-Identifier: MIT
  * Zephyr GPS Manager - GNSS power management, fix acquisition, constellation config
@@ -112,7 +113,6 @@ static int64_t last_promote_ms = 0;
 
 /* Repeater acquire window — GPS only for time sync. The standby interval is
  * unified with companions via gps_wake_interval_ms (prefs.gps_interval). */
-#define GPS_REPEATER_SYNC_TIMEOUT_MS   (5 * 60 * 1000)           /* 5 minutes */
 
 /* The validated fix waiting for gps_process_event() to hand to gps_fix_cb on
  * the main thread. Under gps_mutex. */
@@ -477,7 +477,7 @@ const struct device *gnss_dev = NULL;
 
 /* The SoC light-sleep lock, held only while ACQUIRING: the GNSS UART is not a
  * wake source, so a sleeping SoC would drop NMEA mid-stream, but a GPS in
- * standby (48 h on a repeater) must not keep the SoC awake. Tracked, so the
+ * standby must not keep the SoC awake. Tracked, so the
  * get/put stay 1:1 whichever path ends the window. Nothing without CONFIG_PM. */
 static bool gps_sleep_locked;
 
@@ -499,13 +499,8 @@ static void gps_hold_sleep_lock(bool hold)
  * and after every full power-off; the warm timeout otherwise. */
 static uint32_t gps_acquire_window_ms(void)
 {
-	if (gps_repeater_mode) {
-		return GPS_REPEATER_SYNC_TIMEOUT_MS;
-	}
-	if (standby_powered_off || (!first_fix_acquired && !first_acquire_used)) {
-		return gps_first_fix_timeout_ms;
-	}
-	return gps_acquire_timeout_ms;
+	return gpsAcquireWindowMs(gps_repeater_mode, standby_powered_off, first_fix_acquired,
+		first_acquire_used, gps_first_fix_timeout_ms, gps_acquire_timeout_ms);
 }
 
 /* Go to standby and schedule next wake.

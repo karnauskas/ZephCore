@@ -381,6 +381,7 @@ jobs:
     - name: compile-only roles
       run: |
         west build -b xiao_esp32c3 zephcore --pristine -- -DEXTRA_CONF_FILE="boards/common/kiss_modem.conf"
+        west build -b xiao_esp32s3/esp32s3/procpu zephcore --pristine --sysbuild -- -DEXTRA_CONF_FILE="boards/common/room_server.conf" -Dzephcore_CONFIG_ZEPHCORE_ROLE_ROOM_SERVER=y
         west build -b ttgo_lora32/esp32/procpu zephcore --pristine
         west build -b ttgo_lora32/esp32/procpu zephcore --pristine -- -DEXTRA_CONF_FILE="boards/common/repeater.conf"
         west build -b ttgo_lora32/esp32/procpu zephcore --pristine -- -DEXTRA_CONF_FILE="boards/common/observer.conf"

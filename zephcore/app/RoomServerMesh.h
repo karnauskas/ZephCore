@@ -218,6 +218,9 @@ public:
   void dumpLogFile() override;
   void setTxPower(int8_t power_dbm) override;
   bool setRxBoostedGain(bool enable) override;
+  bool supportsRxPowerSaving() const override;
+  void applyRxPowerSaving() override;
+  void formatRxPowerSaving(char *out, size_t size) const override;
 
   void formatNeighborsReply(char *reply) override;  // ZEPHCORE: defined in the .cpp
   void formatStatsReply(char *reply) override;

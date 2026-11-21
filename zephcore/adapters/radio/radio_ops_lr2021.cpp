@@ -32,6 +32,7 @@ static int lr2021_format_freq_error(const struct device *dev, char *buf, int cap
  * LR2021 (LLD 05). */
 const LoRaRadioOps kLoRaRadioOps = {
 	.loramac_node = false,
+	.rx_duty_cycle = true,
 	.rssi_inst = lr20xx_get_rssi_inst,
 	.rssi_burst = lr20xx_get_rssi_burst,
 	.is_receiving = lr20xx_is_receiving,

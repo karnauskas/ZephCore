@@ -29,6 +29,7 @@ static void sx126x_post_begin(const struct device *dev)
  * the datasheet, so recalibrate stays NULL. */
 const LoRaRadioOps kLoRaRadioOps = {
 	.loramac_node = false,
+	.rx_duty_cycle = true,
 	.rssi_inst = sx126x_get_rssi_inst,
 	.rssi_burst = nullptr,
 	.is_receiving = sx126x_is_receiving,

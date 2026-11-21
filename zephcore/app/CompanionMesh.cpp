@@ -1039,14 +1039,16 @@ static bool isRemoteCompanionCommand(const char *cmd)
 		"get path.hash.mode", "get multi.acks", "get txdelay", "get direct.txdelay",
 		"reboot", "poweroff", "shutdown", "get name", "get wifi.pwd", "set wifi.clear",
 		"get wifi.ssid", "get wifi.enabled", "get wifi.status", "get wifi.ip",
-		"board", "ver", "get tz.offset", "antenna", "filter",
+		"board", "ver", "get tz.offset", "antenna", "filter", "get radio.rxps", "powersaving",
+		"powersaving on", "powersaving off", "gps", "gps sync", "gps on", "gps off",
+		"get gps", "get gps duty", "get rxduty",
 	};
 	static const char *const prefix[] = {
 		"set radio ", "set af ", "set dutycycle ", "set int.thresh ", "set cad ",
 		"set radio.rxgain ", "get tx ", "set tx ", "set rxdelay ", "set agc.reset.interval ",
 		"set path.hash.mode ", "set multi.acks ", "set txdelay ", "set direct.txdelay ",
 		"set name ", "set pin ", "set wifi.ssid ", "set wifi.pwd ", "set wifi.enabled ",
-		"set tz.offset ", "antenna ", "filter ",
+		"set tz.offset ", "antenna ", "filter ", "set radio.rxps ", "set gps duty ", "set rxduty ",
 	};
 	for (const char *e : exact) {
 		if (strcmp(cmd, e) == 0) return true;

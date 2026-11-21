@@ -334,6 +334,24 @@ void CommonCLI::scheduleReboot(uint8_t type)
  * not fold the input buffer: a value can be the second token (`password
  * <value>`). */
 void CommonCLI::handleCommand(uint32_t sender_timestamp, const char* command, char* reply) {
+	if (!strcmp(command, "get radio.rxps")) {
+		_callbacks->formatRxPowerSaving(reply, replyCap(sender_timestamp));
+		return;
+	}
+	if (!strncmp(command, "set radio.rxps ", 15)) {
+		const auto previous = _prefs->rxps;
+		const uint8_t enabled = _prefs->rx_duty_cycle;
+		if (rxPowerSavingCommand(command, _prefs->rx_duty_cycle, _prefs->rxps, reply, replyCap(sender_timestamp)) == 2) {
+			if ((_prefs->rx_duty_cycle && !_callbacks->supportsRxPowerSaving()) || !_callbacks->savePrefs()) {
+				_prefs->rxps = previous; _prefs->rx_duty_cycle = enabled;
+				snprintf(reply, replyCap(sender_timestamp), "Error: RXPS unsupported or preferences could not be saved");
+			} else {
+				_callbacks->applyRxPowerSaving();
+				_callbacks->formatRxPowerSaving(reply, replyCap(sender_timestamp));
+			}
+		}
+		return;
+	}
 #if defined(CONFIG_ZEPHCORE_ROLE_REPEATER) || defined(CONFIG_ZEPHCORE_ROLE_COMPANION)
 	if (handleForwardFilterCommand(_prefs->forward_filters, command, reply, replyCap(sender_timestamp),
 		[this]() { return _callbacks->savePrefs(); })) return;
@@ -713,12 +731,10 @@ void CommonCLI::handleCommand(uint32_t sender_timestamp, const char* command, ch
 		} else {
 			strcpy(reply, "on - Immediate effect");
 		}
-#elif defined(CONFIG_SOC_FAMILY_NORDIC_NRF)
+#else
 		_prefs->powersaving_enabled = 1;
 		savePrefs();
-		strcpy(reply, "on - Immediate effect");
-#else
-		strcpy(reply, "Board not supported");
+		strcpy(reply, "on - MCU idle sleep; light sleep unavailable");
 #endif
 	} else if (memcmp(command, "powersaving off", 15) == 0) {
 		_prefs->powersaving_enabled = 0;
@@ -1833,7 +1849,8 @@ void CommonCLI::handleSetCmd(uint32_t sender_timestamp, const char* command, cha
 		if (val == 0 || val == 1) {
 			_prefs->rx_duty_cycle = (uint8_t)val;
 			savePrefs();
-			snprintf(reply, CLI_REPLY_SIZE, "OK - rxduty=%d (reboot to apply)", _prefs->rx_duty_cycle);
+			_callbacks->applyRxPowerSaving();
+			snprintf(reply, CLI_REPLY_SIZE, "OK - rxduty=%d", _prefs->rx_duty_cycle);
 		} else {
 			strcpy(reply, "Error: must be 0, 1, on, or off");
 		}

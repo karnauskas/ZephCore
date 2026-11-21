@@ -473,3 +473,28 @@ TEST(pjson_filters, "UNIT-PJSON-021", "Forwarding filter defaults saved choices 
         CHECK(isRemoteCompanionCommand(cmd));
     CHECK(!isRemoteCompanionCommand("filtering"));
 }
+
+TEST(pjson_rxps, "UNIT-PJSON-022", "RX power saving settings round trip without changing legacy preferences and retain remote authorization") {
+    for (bool server : {false,true}) {
+        NodePrefs original = defaults(), loaded = defaults();
+        uint8_t before[SERVER_PREFS_SIZE], after[SERVER_PREFS_SIZE];
+        size_t n = server ? serverPrefsEncode(original,before,sizeof(before)) : companionPrefsEncode(original,before,sizeof(before));
+        original.rxps = {100000,20000,0,32};
+        size_t m = server ? serverPrefsEncode(original,after,sizeof(after)) : companionPrefsEncode(original,after,sizeof(after));
+        CHECK(n == m && !memcmp(before,after,n));
+        original.rx_duty_cycle = 1;
+        MemStream out;
+        CHECK(server ? serverPrefsToJson(original,out) : companionPrefsToJson(original,out));
+        CHECK(server ? serverPrefsFromJson(loaded,out) : companionPrefsFromJson(loaded,out));
+        CHECK(loaded.rx_duty_cycle && loaded.rxps.rx_us == 100000 && loaded.rxps.sleep_us == 20000 && loaded.rxps.preamble == 32);
+        loaded = defaults(); MemStream missing("{}");
+        CHECK(server ? serverPrefsFromJson(loaded,missing) : companionPrefsFromJson(loaded,missing));
+        CHECK(!loaded.rx_duty_cycle && !loaded.rxps.level && !loaded.rxps.rx_us);
+        MemStream off("{zc:{rx_dc:0,rxps_level:6,rxps_pre:16}}");
+        CHECK(server ? serverPrefsFromJson(loaded,off) : companionPrefsFromJson(loaded,off));
+        CHECK(!loaded.rx_duty_cycle && loaded.rxps.level == 6 && loaded.rxps.preamble == 16);
+    }
+    for (const char *cmd : {"get radio.rxps", "set radio.rxps balanced", "powersaving", "powersaving on", "powersaving off", "gps sync"})
+        CHECK(isRemoteCompanionCommand(cmd));
+    CHECK(!isRemoteCompanionCommand("set radio.rxpsx on"));
+}

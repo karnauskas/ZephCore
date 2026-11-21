@@ -357,7 +357,7 @@ corrections and variable radio delay can bias it. Extra persistent RAM is
 there is no heap allocation. See [ADR 0012](adr/0012-clock-fusion-diagnostics.md).
 
 **Correction policy** (priority: GPS / manual set > mesh consensus):
-- Any clock set — GPS fix **or** manual set (`time`, `clock sync`, app time set) — arms the same **7-day suppression** of all stepping, bootstrap included, plus drift-envelope pedigree (`noteGPSSync` and `noteManualSync` are identical). A live GPS re-arms it on every fix (so a repeater's 48 h duty cycle keeps GPS owning the clock); a GPS that cannot fix (indoors, dead antenna) becomes mesh-correctable once 7 days pass without a fix. Sensing always continues; a suppressed node shows `hold (suppressed)` in the dry-run.
+- Any clock set — GPS fix **or** manual set (`time`, `clock sync`, app time set) — arms the same **7-day suppression** of all stepping, bootstrap included, plus drift-envelope pedigree (`noteGPSSync` and `noteManualSync` are identical). A live GPS re-arms it on every fix (so a repeater's daily duty cycle keeps GPS owning the clock); a GPS that cannot fix (indoors, dead antenna) becomes mesh-correctable once 7 days pass without a fix. Sensing always continues; a suppressed node shows `hold (suppressed)` in the dry-run.
 - Step trigger 10 min, dead band 5 min, step capped **±1 h**, one step per **6 h**, logged loudly. Production contains coherent wrong-time islands (+28 h × 63 repeaters at analysis time); the cap bounds capture drag to 4 h/day.
 - **Drift-envelope gate**: with a trusted sync + continuous uptime since (pedigree, RAM-only), corrections beyond `elapsed × 300 ppm + 10 min` are physically impossible for a crystal — refused regardless of quorum.
 - **Bootstrap**: local time < firmware build epoch (`FIRMWARE_BUILD_EPOCH`, CMake-injected) is provably wrong → any 3 agreeing senders, step to the cluster's **low edge** (midpoint − 150 s; undershoot so later refinement is always forward = monotonicity-safe).
@@ -905,6 +905,25 @@ The fixed cache costs 704 bytes for 16 sensor slots when sensor support is built
 the singleton and preference alignment add a small fixed cost. No heap is used.
 See [ADR 0013](adr/0013-adaptive-power-budget.md).
 
+### 6.2.2 Power-saving profile controls
+
+`helpers/RxPowerSaving.*` owns portable RXPS configuration, CLI parsing and
+timing constraints. `LoRaRadio` applies them through each driver's RX duty-cycle
+capability, reports requested/effective mode and arm errors, and leaves continuous
+RX when timing is invalid or the hardware arm fails. An in-flight packet or TX
+retains its timing until receive rearm. SX126x/LR1110/LR2021 support the operation;
+SX127x rejects enabling it. The named levels follow the reviewed EasySkyMesh
+source (3/6/8), with ZephCore's configured preamble and ADR 0006 guards.
+Experimental levels 9–10 are rejected. Timing fields are JSON-only; the legacy
+RX enable switch and binary codec layouts are unchanged.
+
+Room servers on boards declaring light-sleep capability now share the repeater
+PM composition. MCU idle, interrupt wake, transport/peripheral locks, static
+ESP32 80 MHz operation and BLE connection/security policy remain as before.
+See [ADR 0021](adr/0021-power-saving-controls.md) for reference revisions, source
+differences, timing units and unverified hardware limits.
+
+
 ### 6.3 RepeaterMesh
 
 Autonomous operation features:
@@ -1116,7 +1135,7 @@ Like the standby depth, the choice follows from the duty interval alone, never f
 
 **Repeater mode**
 
-Repeaters and room servers default to `CONFIG_ZEPHCORE_REPEATER_GPS_INTERVAL_SEC` (48 h) for GPS duty — GPS wakes only for a periodic time-sync fix (5-minute acquire window). The interval is now unified with companion via `prefs.gps_interval` and is configurable at runtime via `set gps duty <sec>`; persists across reboots.
+Repeaters and room servers default to `CONFIG_ZEPHCORE_REPEATER_GPS_INTERVAL_SEC` (24 h) for GPS duty — GPS wakes only for a periodic time-sync fix (5-minute acquire window). Existing saved intervals are retained. The interval is unified with companion via `prefs.gps_interval` and is configurable at runtime via `set gps duty <sec>`; persists across reboots. `helpers/GpsPowerSchedule.h` pins cold/warm/server window selection for host tests. Valid fixes still end a duty acquisition early, and `gps sync` requests an immediate fresh acquisition without enabling a disabled GPS.
 
 ### 7.4 USB (`adapters/usb/`)
 

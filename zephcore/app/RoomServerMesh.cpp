@@ -879,6 +879,10 @@ bool RoomServerMesh::setRxBoostedGain(bool enable) {
   return getRadioDriver(_radio).setRxBoost(enable);
 }
 
+bool RoomServerMesh::supportsRxPowerSaving() const { return getRadioDriver(_radio).supportsRxPowerSaving(); }
+void RoomServerMesh::applyRxPowerSaving() { getRadioDriver(_radio).applyRxPowerSaving(); }
+void RoomServerMesh::formatRxPowerSaving(char *out, size_t size) const { getRadioDriver(_radio).formatRxPowerSaving(out, size); }
+
 // ZEPHCORE: ours. Through RepeaterDataStore.
 void RoomServerMesh::saveIdentity(const mesh::LocalIdentity& new_id) {
   if (_store) {

@@ -552,7 +552,7 @@ four radio parameters together, since they are one interop-critical set.
 | `set loop.detect <mode>` | `off`, `minimal`, `moderate`, `strict` | Loop detection sensitivity |
 | `set radio.rxgain <0\|1\|on\|off>` | | RX gain boost, applied live. Replies `Error: unsupported` on radios without RX boost (SX127x); the pref is still saved. |
 | `set radio.fem.rxgain <0\|1\|on\|off>` | default **1** | Routes receive through the external FEM's LNA (`1`) or around it via the FEM's bypass path (`0`), applied live. Sensitivity for battery life — `0` costs roughly 17 dB and saves the LNA's supply current. Transmit, and the driver's idle/sleep gating of the FEM, are unaffected either way. Supported only where the FEM's receive path is software-selectable and that select line is wired to the radio node as `lna-bypass-gpios` — today the KCT8103L boards, `heltec_t096`, `heltec_wireless_tracker_v2`, `heltec_wifi_lora32_v43` and `heltec_wifi_lora32_v4_r8`. Every other board reports `Error: unsupported`: `heltec_wifi_lora32_v4`'s GC1109 has no receive-path select (its CPS is don't-care in RX, same as MeshCore); `station_g2`, `gat562_30s`, `ikoka_nano_30dbm` and `promicro_sx1262` have only the DIO2/TXEN/RXEN transmit-receive switch; `rak3401_1watt`'s SKY66122 is enabled by a standalone always-on regulator outside the radio node; and non-SX126x radios (LR1110, LR2021, SX127x) never implement it. The pref is still saved when unsupported. **Do not expect the FEM's chip-enable to be the knob** — deasserting `antenna-enable-gpios` in RX shuts the part down and takes the through path with it (~69 dB measured on a V4.3), which is what 1.17.2 did before this moved to `lna-bypass-gpios`. |
-| `set rxduty <0\|1\|on\|off>` | | *(ZephCore only)* RX duty cycle mode *(reboot required)*. Window timing auto-sized per SF/BW/preamble from the SX126x datasheet constraints (boot log line `rxduty:` shows the result). Zero-loss guarantee assumes senders on preamble-32 firmware (current MeshCore at SF≤8); legacy preamble-16 senders are only caught ~50% worst-phase — keep off until the local mesh has converted. Presets with 16-symbol preambles (SF≥9) fall back to continuous RX automatically. |
+| `set rxduty <0\|1\|on\|off>` | | *(ZephCore only)* Toggle RX duty cycle live, retaining the current profile/manual settings. See `radio.rxps` below for timing and effective-mode diagnostics. |
 | `set display.rotate <0\|1\|on\|off>` | default **0** | *(ZephCore only)* Rotate the display 180 degrees, for cases and upgrade kits that mount the screen upside down (e.g. the Meshnology N37E for the Wio Tracker L1). Applied live — the driver flips the panel's `SEGMENT_MAP` and `COM_OUTPUT_SCAN`, two bytes on the wire, and the next frame comes out rotated with no redraw and no per-frame cost. **Only full-height SSD1306 and SH1106 panels support this** (`rak4631`, `gat562_30s`, `heltec_wifi_lora32_v4`/`v43`/`v4_r8`, `lilygo_t3s3`, `station_g2`, `wio_tracker_l1`); every other panel replies `Error: this panel cannot rotate` and the pref is **not** saved, so a stored value can never disagree with what the screen shows. `lilygo_timpulse_plus` is excluded despite being an SSD1306: its 64x32 glass is windowed into a 128x64 controller at `page-offset 4`, and the COM-scan reversal flips the controller's whole range, which would move the image off the bonded region. E-paper (SSD16xx) is excluded on purpose: its driver accepts a 180-degree orientation but implements it by flipping the RAM entry mode only, which reverses byte order without reversing bit order inside each byte — it would report success and render wrong. |
 | `set input.rotate <0\|1\|on\|off>` | default **0** | *(ZephCore only)* Swap the joystick/D-pad axes — up/down and left/right — to match an upside-down mount. Applied live. Deliberately **separate** from `display.rotate`: a case can flip the screen without moving the stick, and boards whose panel cannot rotate can still need the axis swap. Works on every board with directional input, in both the joystick UI and the button UI (where it swaps page-prev/page-next). Non-directional keys, tap codes and long-press gestures are unaffected. |
 | `set tz.offset <-12..14>` | default **0** (UTC) | Offset from UTC in hours, applied when formatting the **on-device clock display** — the top bar, the status page (companion and server roles) and the joystick System -> Time screen, which show e.g. `UTC+2`, `UTC-3:30` or `UTC+5:45` instead of `UTC` (`UTC+1245` for the two-digit-hour zones +10:30 and +12:45/+13:45, to fit 8 characters). Decimal hours in quarter-hour steps, as upstream MeshCore 1.18+ (`5.5` = +5:30, `5.75` = +5:45, `-9.5` = -9:30); any other fraction is refused (`Error: offset must be whole quarter hours`), where upstream stores it as given. The reply and `get tz.offset` print the stored value exactly (`OK - tz.offset=5.75`; upstream prints one decimal, so `5.8`). Accepts `default`. **Display only, by design.** The RTC itself, `clock`, `clock sync` and `time <epoch>` all stay UTC: they round-trip with each other, apps parse them, and an offset that reached the clock would read as a jump to every timestamp consumer on the node (advert timestamps, the ACL's monotonic `sender_timestamp` gate, MeshTimeSync) — a backward clock silently mutes a node on the mesh. Accepted on headless nodes, where it is simply inert. |
@@ -839,3 +839,66 @@ data. Disabling filters does not enable unsupported payload routing or bypass
 region, hop, loop, duplicate, `repeat off` or wardriving policies. `repeat.all`
 does not bypass these filters. Other SaveMeshcore restrictions on radio and advert
 settings are outside this integration.
+
+### RX power saving and GPS schedules
+
+`get radio.rxps` reports the requested enable flag (`desired`), live receive mode
+(`effective=armed|continuous`), hardware support, profile level, assumed sender
+preamble, timings in microseconds, last error and failed hardware-arm count.
+Preamble `0` follows the configured SF (32 symbols at SF5–SF8, 16 at SF9–SF12).
+`clear stats` clears the arm-failure count.
+
+```text
+set radio.rxps conservative
+set radio.rxps balanced
+set radio.rxps max
+set radio.rxps level 6 preamble 32
+set radio.rxps 100000 20000
+set radio.rxps off
+get radio.rxps
+```
+
+`on`/`conservative` select level 3, `balanced` level 6, and `max` level 8.
+A bare number 1–8 or `level N` selects that level. Named profiles use the
+configured preamble; `level N preamble 16|32` constrains the sender-preamble
+assumption. The setting does not change the transmitted preamble. Levels 9/10,
+`overdrive` and `riskyWorkingMax` are unavailable here: their fork-specific
+experimental behavior has not been verified with Zephyr drivers.
+
+SX126x, LR1110 and LR2021 support RXPS; SX127x reports unsupported. Companion,
+repeater and room-server commands use local/authorized remote CLI; observer uses
+its local CLI. RXPS stays off by default. Settings persist immediately in
+`prefs.json`; failed saves restore the previous choice. `set rxduty` toggles the
+same enable switch live and retains profile/manual timings.
+
+Guarded levels recalculate after SF/BW changes and respect ZephCore's existing
+catch, drift and complete-packet bounds. Levels may collapse to identical timings.
+Manual periods range from 1,000 to 30,000,000 us and remain stored across radio
+changes, but are checked against the active modem configuration before arming.
+Unsafe timing reports `err=-34` (`ERANGE`) and continuous RX. With the default
+8-symbol detection guard, 16-symbol preambles have no viable sleep window;
+SF9–SF12 therefore stay continuous. Mixed meshes with shorter sender preambles
+can lose packets even where a 32-symbol profile arms. No zero-loss claim is made.
+
+Timings are rounded for the radio/Zephyr timer interfaces. Manual `rx`/`sleep`
+are the saved request; `erx`/`eslp` report submitted periods when armed, including
+an extra RX millisecond for timer quantization. Native register rounding can be
+slightly shorter. A change during a packet or TX is applied on normal receive
+rearm, preserving the packet already in flight. Hardware arm errors fall back
+to continuous RX and appear in `err`/`fail`.
+
+`powersaving on|off` controls optional MCU light sleep on capable ESP32 builds;
+room servers now use the repeater policy on boards declaring light-sleep support.
+Other platforms retain normal MCU idle sleep and report light sleep unavailable.
+USB/serial and peripheral PM locks remain in force. ESP32 stays at its existing
+80 MHz operating point; dynamic CPU-frequency and BLE-connection tuning from the
+fork are not enabled.
+
+Fresh repeaters/room servers wake enabled GPS daily for a bounded five-minute
+acquisition and sleep early after a validated fix. Saved intervals are retained.
+Companions retain five-minute standby, two-minute warm and five-minute cold
+acquisition windows. `gps sync` requests a fresh fix only if GPS is enabled;
+`gps on|off`, `get gps` and `set gps duty <seconds>` retain their existing meaning,
+including `0` for always-on. These controls are available to companion contacts
+with remote CLI permission `0x10` as well as repeater/room admins. Shared GPS
+power rails and forward-only time updates retain their existing behavior.

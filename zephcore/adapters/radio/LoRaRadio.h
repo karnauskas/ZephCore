@@ -73,6 +73,7 @@ public:
 	uint32_t getPacketsRecvErrors() const override { return (uint32_t)atomic_get(&_packets_recv_errors); }
 	/* `clear stats`, including a family's own accumulators (LR2021). */
 	void resetStats() {
+		_rxps_failures = 0;
 		_immune.clearCounters(getPacketsRecv() + getPacketsRecvErrors());
 		atomic_set(&_packets_recv, 0);
 		atomic_set(&_packets_sent, 0);
@@ -95,6 +96,9 @@ public:
 
 	/* Power saving */
 	void enableRxDutyCycle(bool enable);
+	bool supportsRxPowerSaving() const { return _ops.rx_duty_cycle; }
+	void applyRxPowerSaving();
+	void formatRxPowerSaving(char *out, size_t size) const;
 	bool isRxDutyCycleEnabled() const { return _rx_duty_cycle_enabled; }
 	/* Returns false when the chip has no RX boost feature (SX127x). */
 	bool setRxBoost(bool enable);
@@ -309,11 +313,12 @@ private:
 
 	/* Power saving */
 	bool _rx_duty_cycle_enabled;
+	bool _rxps_armed = false;
+	int _rxps_error = 0;
+	uint32_t _rxps_failures = 0;
 	bool _rx_boost_enabled;
 
-	/* Last duty-cycle timing handed to the driver — used to log timing
-	 * changes once at INF instead of on every RX restart.  0/0 = never
-	 * computed; UINT32_MAX rx = continuous-RX fallback active. */
+	/* Last timing submitted to the driver; zero in continuous RX. */
 	uint32_t _dc_last_rx_us;
 	uint32_t _dc_last_sleep_us;
 

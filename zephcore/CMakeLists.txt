@@ -199,9 +199,9 @@ if(ZEPHCORE_PLATFORM STREQUAL "esp32")
     # `powersaving on`, and its build costs about 4 KB of DRAM, which a WiFi +
     # BLE companion without PSRAM gives up in contacts
     # (devdocs/lld/13-power-management.md, section 13).
-    if(ZEPHCORE_BUILD_ROLE STREQUAL "repeater" AND ZEPHCORE_BOARD_LIGHT_SLEEP)
+    if((ZEPHCORE_BUILD_ROLE STREQUAL "repeater" OR ZEPHCORE_BUILD_ROLE STREQUAL "room_server") AND ZEPHCORE_BOARD_LIGHT_SLEEP)
         zephcore_add_conf(${_zc}/pm_esp32.conf)
-        message(STATUS "  ESP32 light sleep: auto-enabled (repeater, board declares it)")
+        message(STATUS "  ESP32 light sleep: auto-enabled (${ZEPHCORE_BUILD_ROLE}, board declares it)")
     elseif(ZEPHCORE_BUILD_ROLE STREQUAL "companion" AND ZEPHCORE_BOARD_LIGHT_SLEEP_COMPANION)
         zephcore_add_conf(${_zc}/pm_esp32.conf)
         message(STATUS "  ESP32 light sleep: auto-enabled (companion, board declares it; opt-in at run time)")
@@ -391,6 +391,7 @@ target_sources(app PRIVATE
   helpers/PowerBudget.cpp
   helpers/PingBot.cpp
   helpers/ForwardFilter.cpp
+  helpers/RxPowerSaving.cpp
   # Captures the reset cause before anything consumes it; every role needs it
   # at boot, so it is never conditional.
   helpers/boot_info.c

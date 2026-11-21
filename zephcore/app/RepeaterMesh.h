@@ -294,6 +294,9 @@ public:
   // ZEPHCORE: no hasPendingWork(); the event loop never polls for it.
 
   bool setRxBoostedGain(bool enable) override;
+  bool supportsRxPowerSaving() const override;
+  void applyRxPowerSaving() override;
+  void formatRxPowerSaving(char *out, size_t size) const override;
 
   // ZEPHCORE: every radio family, not only LR2021 (the others report unsupported).
   bool configSideDetectors(const uint8_t* sfs, uint8_t num) override;

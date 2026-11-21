@@ -14,6 +14,7 @@
 #include "RadioCheckpoint.h"
 #include "PrivacyEngine.h"
 #include "ForwardFilter.h"
+#include "RxPowerSaving.h"
 
 /* LEDS_RADIO_* / LEDS_HB_* mode values for the leds_radio_mode and leds_hb_mode
  * fields below.  They live in led_gate.h because the heartbeat consumers are C
@@ -73,6 +74,7 @@ struct NodePrefs {
 	ObserverCreds *uplink_creds; // Runtime binding for JSON-only network settings.
 	PrivacyPrefs privacy; // JSON-only companion location policy
 	ForwardFilters forward_filters; // JSON-only forwarding policy
+	RxPowerSavingPrefs rxps; // JSON-only RX timing; rxduty is the enable switch
 	RadioCheckpoint radio_checkpoint; // JSON-only startup recovery state
 	/* ---- Common fields (both roles) ---- */
 	float airtime_factor;

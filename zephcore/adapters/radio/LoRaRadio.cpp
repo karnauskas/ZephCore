@@ -593,8 +593,13 @@ void LoRaRadio::clearRadioOverride()
 
 void LoRaRadio::startReceive()
 {
+	if (_prefs) _rx_duty_cycle_enabled = _prefs->rx_duty_cycle != 0;
+	_rxps_armed = false;
+	_rxps_error = 0;
+	_dc_last_rx_us = _dc_last_sleep_us = 0;
 	configureRx();
 	if (!_config_cached) {
+		_rxps_error = _last_hw_error;
 		atomic_set(&_in_recv_mode, 0);
 		return;
 	}
@@ -602,88 +607,36 @@ void LoRaRadio::startReceive()
 	int ret;
 
 	if (_rx_duty_cycle_enabled) {
-		/* Duty-cycle window sizing (SX1261/2 DS §13.1.7, AN1200.36; LLD 03 §13):
-		 *   catch:    sleep + wake <= (P - 2D - 1) * Tsym
-		 *   complete: 2R + S >= (P + 14) * Tsym
-		 *   floor:    R >= (D + 1) * Tsym
-		 * No viable sleep budget -> continuous RX. */
 		struct lora_modem_config cfg;
 		buildModemConfig(cfg, false);
-
-		const uint8_t sf = (uint8_t)cfg.datarate;
-		const uint32_t bw_hz = bandwidth_to_hz(cfg.bandwidth);
-		const uint16_t P = cfg.preamble_len;
-		const uint16_t D = rxDutyDetectSymbols(sf);
-
-		if (bw_hz > 0 && P > 2 * D + 1) {
-			const uint32_t sym_us = (uint32_t)
-				(((uint64_t)(1U << sf) * 1000000ULL) / bw_hz);
-			const uint32_t trans_us = hwWakeupTimeUs();
-
-			/* Derate the budget by DC_MARGIN_PCT: the RC sleep timer
-			 * drifts and the wake time "may vary"; an overshoot drops
-			 * phase-edge packets. */
-			const uint32_t deaf_budget_us =
-				(uint32_t)(P - 2 * D - 1) * sym_us;
-			const uint32_t deaf_us = deaf_budget_us -
-				(uint32_t)(((uint64_t)deaf_budget_us *
-					    CONFIG_ZEPHCORE_LORA_DC_MARGIN_PCT) /
-					   100U);
-
-			if (deaf_us > trans_us + 2000) {
-				const uint32_t sleep_us = deaf_us - trans_us;
-				const uint32_t complete_us =
-					(uint32_t)(P + 14) * sym_us;
-				uint32_t rx_us = (uint32_t)(D + 1) * sym_us;
-
-				if (complete_us > sleep_us &&
-				    rx_us < (complete_us - sleep_us + 1) / 2) {
-					rx_us = (complete_us - sleep_us + 1) / 2;
-				}
-
-				if (rx_us != _dc_last_rx_us ||
-				    sleep_us != _dc_last_sleep_us) {
-					_dc_last_rx_us = rx_us;
-					_dc_last_sleep_us = sleep_us;
-					LOG_INF("rxduty: rx=%ums sleep=%ums trans=%ums (P=%u D=%u, off=%u%%)",
-						rx_us / 1000, sleep_us / 1000,
-						trans_us / 1000, P, D,
-						(uint32_t)(((uint64_t)sleep_us * 100) /
-							   (rx_us + sleep_us + trans_us)));
-				}
-
-				ret = lora_recv_duty_cycle_async(_dev,
-							   K_USEC(rx_us),
-							   K_USEC(sleep_us),
-							   rxCallbackStatic, this);
-				if (ret == 0) {
-					_rx_entry_cyc = k_cycle_get_32();
-					atomic_set(&_in_recv_mode, 1);
-					return;
-				}
-				if (ret == -EBUSY) {
-					/* A live TX owns the chip (CAD-busy leaves it in
-					 * RX, which the driver's fast path re-arms). */
-					LOG_DBG("rxduty: busy (TX in progress) — continuous RX");
-				} else if (ret != -ENOSYS) {
-					LOG_ERR("lora_recv_duty_cycle_async failed: %d", ret);
-				}
-				/* Fall through to continuous RX */
-			} else if (_dc_last_rx_us != UINT32_MAX) {
-				_dc_last_rx_us = UINT32_MAX;
-				LOG_INF("rxduty: wake transition %uus exceeds deaf budget %uus — continuous RX",
-					trans_us, deaf_us);
+		RxPowerSavingTiming timing;
+		const RxPowerSavingPrefs prefs = _prefs ? _prefs->rxps : RxPowerSavingPrefs{};
+		if (!_ops.rx_duty_cycle) _rxps_error = -ENOTSUP;
+		else if (!rxPowerSavingTiming(prefs, uint8_t(cfg.datarate), bandwidth_to_hz(cfg.bandwidth),
+			cfg.preamble_len, rxDutyDetectSymbols(uint8_t(cfg.datarate)), hwWakeupTimeUs(),
+			CONFIG_ZEPHCORE_LORA_DC_MARGIN_PCT, timing)) _rxps_error = -ERANGE;
+		else {
+			_dc_last_rx_us = timing.rx_us;
+			_dc_last_sleep_us = timing.sleep_us;
+			ret = lora_recv_duty_cycle_async(_dev,
+				K_TICKS(k_us_to_ticks_floor64(timing.rx_us)),
+				K_TICKS(k_us_to_ticks_floor64(timing.sleep_us)),
+				rxCallbackStatic, this);
+			if (!ret) {
+				_rxps_armed = true;
+				_rx_entry_cyc = k_cycle_get_32();
+				atomic_set(&_in_recv_mode, 1);
+				return;
 			}
-		} else if (_dc_last_rx_us != UINT32_MAX) {
-			_dc_last_rx_us = UINT32_MAX;
-			LOG_INF("rxduty: preamble %u too short for guaranteed catch (need >%u syms) — continuous RX",
-				P, 2 * D + 1);
+			_rxps_error = ret;
+			++_rxps_failures;
 		}
 	}
 
 	ret = lora_recv_async(_dev, rxCallbackStatic, this);
 	if (ret < 0) {
 		LOG_ERR("lora_recv_async failed: %d", ret);
+		_rxps_error = ret;
 		_last_hw_error = ret;
 		atomic_set(&_in_recv_mode, 0);
 		return;
@@ -1513,13 +1466,35 @@ int LoRaRadio::formatCadStatus(char *buf, int cap)
 void LoRaRadio::enableRxDutyCycle(bool enable)
 {
 	_rx_duty_cycle_enabled = enable;
-	LOG_INF("RX duty cycle %s", enable ? "enabled" : "disabled");
+	applyRxPowerSaving();
+}
 
+void LoRaRadio::applyRxPowerSaving()
+{
+	if (_prefs) _rx_duty_cycle_enabled = _prefs->rx_duty_cycle != 0;
+	/* An in-flight packet/TX keeps its current timing until receive is rearmed. */
+	if (atomic_get(&_tx_active) || hwIsReceiving()) return;
 	if (atomic_get(&_in_recv_mode)) {
-		/* Restart receive to apply new duty cycle state */
 		hwCancelReceive();
 		atomic_set(&_in_recv_mode, 0);
 		startReceive();
+	}
+}
+
+void LoRaRadio::formatRxPowerSaving(char *out, size_t size) const
+{
+	const RxPowerSavingPrefs p = _prefs ? _prefs->rxps : RxPowerSavingPrefs{};
+	const bool armed = _rxps_armed && atomic_get(&_in_recv_mode) && !atomic_get(&_tx_active);
+	snprintf(out, size, "desired=%s,effective=%s,supported=%s,level=%u,preamble=%u,rx=%u,sleep=%u,err=%d,fail=%u",
+		_rx_duty_cycle_enabled ? "on" : "off", armed ? "armed" : "continuous",
+		_ops.rx_duty_cycle ? "yes" : "no", p.level, p.preamble,
+		(unsigned)(p.level || (!p.rx_us && !p.sleep_us) ? _dc_last_rx_us : p.rx_us),
+		(unsigned)(p.level || (!p.rx_us && !p.sleep_us) ? _dc_last_sleep_us : p.sleep_us),
+		_rxps_error, (unsigned)_rxps_failures);
+	if (armed && !p.level && p.rx_us) {
+		size_t used = strlen(out);
+		if (used < size) snprintf(out + used, size - used, ",erx=%u,eslp=%u",
+			(unsigned)_dc_last_rx_us, (unsigned)_dc_last_sleep_us);
 	}
 }
 

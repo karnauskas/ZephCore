@@ -25,3 +25,4 @@ restructure; most describe decisions taken earlier. The system view is in [../DE
 | [0018](0018-lithuania-radio-defaults.md) | Match Atviras Tinklas radio defaults |
 | [0019](0019-observer-mqtt-slots.md) | Resource-bounded observer MQTT slots and compatible broker presets |
 | [0020](0020-forwarding-filters.md) | Shared forwarding filters with JSON-only preferences |
+| [0021](0021-power-saving-controls.md) | Power-saving controls and guarded RX profiles |

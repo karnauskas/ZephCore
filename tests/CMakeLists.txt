@@ -2,6 +2,11 @@ cmake_minimum_required(VERSION 3.20)
 project(zephcore_host_tests LANGUAGES C CXX)
 
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
+set(RXPS_SOURCE "${CMAKE_CURRENT_LIST_DIR}/../zephcore/adapters/radio/LoRaRadio.cpp")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${RXPS_SOURCE}")
+execute_process(COMMAND ${Python3_EXECUTABLE}
+  "${CMAKE_CURRENT_LIST_DIR}/support/rxps_boundary.py" "${RXPS_SOURCE}"
+  "${CMAKE_CURRENT_BINARY_DIR}/rxps_adapter.inc" COMMAND_ERROR_IS_FATAL ANY)
 set(MAC_SOURCE "${CMAKE_CURRENT_LIST_DIR}/../zephcore/src/Utils.cpp")
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${MAC_SOURCE}")
 execute_process(COMMAND ${Python3_EXECUTABLE}
@@ -33,6 +38,8 @@ execute_process(COMMAND ${Python3_EXECUTABLE}
   "${CMAKE_CURRENT_BINARY_DIR}/sx127x_table.inc" COMMAND_ERROR_IS_FATAL ANY)
 set(PRODUCTION "${CMAKE_CURRENT_LIST_DIR}/../zephcore")
 add_executable(zephcore_unit
+  unit/rxps_tests.cpp
+  ${PRODUCTION}/helpers/RxPowerSaving.cpp
   unit/forward_filter_tests.cpp
   support/mac_boundary.cpp
   ${PRODUCTION}/helpers/ForwardFilter.cpp

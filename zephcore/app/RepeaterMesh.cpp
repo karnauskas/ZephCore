@@ -1233,6 +1233,10 @@ bool RepeaterMesh::setRxBoostedGain(bool enable) {
   return getRadioDriver(_radio).setRxBoost(enable);
 }
 
+bool RepeaterMesh::supportsRxPowerSaving() const { return getRadioDriver(_radio).supportsRxPowerSaving(); }
+void RepeaterMesh::applyRxPowerSaving() { getRadioDriver(_radio).applyRxPowerSaving(); }
+void RepeaterMesh::formatRxPowerSaving(char *out, size_t size) const { getRadioDriver(_radio).formatRxPowerSaving(out, size); }
+
 #if 1  // ZEPHCORE: every radio family (was USE_LR2021); non-LR2021 adapters report unsupported
 // ZEPHCORE: ours. Through the LoRa adapter.
 bool RepeaterMesh::configSideDetectors(const uint8_t* sfs, uint8_t num) {

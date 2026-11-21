@@ -966,6 +966,31 @@
       "id": "UNIT-PJSON-021",
       "name": "Forwarding filter defaults saved choices binary compatibility and remote commands",
       "source": "tests/unit/prefs_json_tests.cpp"
+    },
+    {
+      "id": "UNIT-RXPS-001",
+      "name": "RX profiles and manual windows preserve catch completion wake and rounding bounds",
+      "source": "tests/unit/rxps_tests.cpp"
+    },
+    {
+      "id": "UNIT-RXPS-002",
+      "name": "RXPS command parser matches reviewed profiles preserves errors and rejects experimental levels",
+      "source": "tests/unit/rxps_tests.cpp"
+    },
+    {
+      "id": "UNIT-RXPS-003",
+      "name": "GPS acquisition remains bounded for server cold warm and first-window phases",
+      "source": "tests/unit/rxps_tests.cpp"
+    },
+    {
+      "id": "UNIT-RXPS-004",
+      "name": "Production RX adapter reports arm failures unsupported radios and defers active packet changes",
+      "source": "tests/unit/rxps_tests.cpp"
+    },
+    {
+      "id": "UNIT-PJSON-022",
+      "name": "RX power saving settings round trip without changing legacy preferences and retain remote authorization",
+      "source": "tests/unit/prefs_json_tests.cpp"
     }
   ]
 }

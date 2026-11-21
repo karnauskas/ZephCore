@@ -17,6 +17,7 @@ struct LoRaRadioOps {
 	/* loramac-node backend (SX127x): its TX and RX configs are disjoint
 	 * state, so configure() must not take the direction-only fast path. */
 	bool loramac_node;
+	bool rx_duty_cycle;
 
 	/* Instantaneous RSSI in dBm. NULL: no readout, -80 is reported. */
 	int16_t (*rssi_inst)(const struct device *dev);

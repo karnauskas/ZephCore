@@ -306,6 +306,10 @@ timeout, so noise-floor sampling runs even without packet arrivals. Repeater and
 - Low-battery policy for every companion (`PowerPolicy`): three low readings 30 s apart, never on external power,
   never on a reading under 2000 mV (no battery).
 - GPS: duty-cycled; holds the SoC light-sleep lock only while acquiring.
+- RX power-saving profiles/manual windows keep the catch and packet-completion bounds in ADR 0006.
+  Requested settings and effective RX mode are separate; invalid timing or an arm error leaves continuous RX.
+  Configuration changes wait for an in-flight packet/TX to finish. See ADR 0021.
+- Capable ESP32 room-server boards use the same light-sleep policy and interrupt wake path as repeaters.
 - ESP32 companions on boards that declare it can light-sleep after `powersaving on` (off by default): never
   while a USB host is attached, the display is on or a BLE link is not yet encrypted.
 - WiFi uplink and observer: the station uses WiFi modem sleep. On ESP32 light-sleep repeaters it holds the SoC

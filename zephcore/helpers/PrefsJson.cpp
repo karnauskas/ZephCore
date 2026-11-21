@@ -87,6 +87,10 @@ protected:
 		def("leds_hb", _p->leds_hb_mode);
 		def("leds_brightness", _p->led_brightness);
 		def("rx_dc", _p->rx_duty_cycle);
+		def("rxps_level", _p->rxps.level);
+		def("rxps_pre", _p->rxps.preamble);
+		def("rxps_rx", _p->rxps.rx_us);
+		def("rxps_sleep", _p->rxps.sleep_us);
 		def("mts", _p->meshtimesync);
 		def("cad_auto", _p->cad_auto);
 		def("cad_off", _p->cad_offset);
